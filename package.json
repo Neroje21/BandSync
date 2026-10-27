@@ -1,0 +1,10 @@
+{
+  "name": "songsterr-jam",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "play": "node scripts/play.mjs",
+    "play:online": "node scripts/play.mjs --online",
+    "build:apk": "node scripts/build-apk.mjs"
+  }
+}
