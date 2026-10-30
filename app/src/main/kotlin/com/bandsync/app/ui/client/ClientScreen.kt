@@ -29,7 +29,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.bandsync.app.net.DiscoveredHost
+import com.bandsync.app.net.RadioState
 import com.bandsync.app.session.ClientViewModel
+import com.bandsync.app.ui.common.ConnectionStatus
 import com.bandsync.app.ui.common.KeepScreenOn
 import com.bandsync.app.ui.common.LeaveGuard
 import com.bandsync.app.ui.common.ShowMessages
@@ -49,6 +51,7 @@ fun ClientScreen(onLeave: () -> Unit, viewModel: ClientViewModel = viewModel()) 
     val state by viewModel.state.collectAsStateWithLifecycle()
     val hosts by viewModel.hosts.collectAsStateWithLifecycle()
     val pairingCode by viewModel.pairingCode.collectAsStateWithLifecycle()
+    val radio by viewModel.radio.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
 
     KeepScreenOn()
@@ -61,7 +64,14 @@ fun ClientScreen(onLeave: () -> Unit, viewModel: ClientViewModel = viewModel()) 
             if (state.link == Link.Connected || followedSomething) {
                 InSession(state, viewModel, hosts, pairingCode)
             } else {
-                FindMaster(viewModel.role, hosts, pairingCode, onSelect = viewModel::connect)
+                FindMaster(
+                    role = viewModel.role,
+                    hosts = hosts,
+                    pairingCode = pairingCode,
+                    radio = radio,
+                    onSelect = viewModel::connect,
+                    onRetry = viewModel::retrySearch,
+                )
             }
         }
     }
@@ -72,18 +82,23 @@ private fun FindMaster(
     role: Role,
     hosts: List<DiscoveredHost>,
     pairingCode: String?,
+    radio: RadioState,
     onSelect: (DiscoveredHost) -> Unit,
+    onRetry: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Joining as ${role.label}", style = MaterialTheme.typography.headlineMedium)
         if (pairingCode != null) {
             PairingCode(pairingCode)
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator()
-                Text("Looking for a master nearby…")
+            if (radio == RadioState.Active) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator()
+                    Text("Looking for a master nearby…")
+                }
             }
             HostList(hosts, onSelect)
+            if (hosts.isEmpty()) ConnectionStatus(radio, "Searching. No master found yet.", onRetry)
         }
     }
 }

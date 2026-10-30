@@ -45,6 +45,7 @@ class ClientViewModel(application: Application) : AndroidViewModel(application) 
     val sheetLayouts: SheetLayouts = app.sheetLayouts
     val state = session.state
     val hosts = nearby.hosts
+    val radio = nearby.radio
     val pairingCode = nearby.pairingCode
     val ticks = engine.ticks
     val messages = nearby.errors
@@ -70,6 +71,7 @@ class ClientViewModel(application: Application) : AndroidViewModel(application) 
     fun masterNow(): Long = session.clockSync.toMaster(clock.nowNs())
 
     fun connect(host: DiscoveredHost) = nearby.requestConnection(name, host.endpoint)
+    fun retrySearch() = nearby.restartDiscovery()
 
     override fun onCleared() {
         nearby.shutdown()

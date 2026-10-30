@@ -7,15 +7,14 @@ import android.os.Build
 import androidx.core.content.ContextCompat
 
 /**
- * What Nearby Connections needs granted at runtime on this Android version. PDFs need nothing here:
- * the system file picker grants access to just the files the user chooses.
+ * What Nearby Connections needs granted at runtime on this Android version. Location is on the list for every
+ * version, as the manifest explains. PDFs need nothing here: the system file picker grants access to just the
+ * files the user chooses.
  */
 fun requiredPermissions(sdk: Int = Build.VERSION.SDK_INT): List<String> = buildList {
-    if (sdk <= 32) {
-        add(Manifest.permission.ACCESS_COARSE_LOCATION)
-        add(Manifest.permission.READ_EXTERNAL_STORAGE) // Reading a received FILE payload.
-    }
-    if (sdk in 29..32) add(Manifest.permission.ACCESS_FINE_LOCATION)
+    add(Manifest.permission.ACCESS_COARSE_LOCATION)
+    add(Manifest.permission.ACCESS_FINE_LOCATION)
+    if (sdk <= 32) add(Manifest.permission.READ_EXTERNAL_STORAGE) // Reading a received FILE payload.
     if (sdk >= 31) {
         add(Manifest.permission.BLUETOOTH_ADVERTISE)
         add(Manifest.permission.BLUETOOTH_CONNECT)

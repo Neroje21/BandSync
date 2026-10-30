@@ -55,6 +55,7 @@ class MasterViewModel(application: Application) : AndroidViewModel(application) 
     val library: List<LibrarySong> = SongLibrary.songs(application)
     val state = session.state
     val joinRequests = nearby.joinRequests
+    val radio = nearby.radio
     val ticks = engine.ticks
     val messages = merge(nearby.errors, notices)
 
@@ -72,6 +73,7 @@ class MasterViewModel(application: Application) : AndroidViewModel(application) 
 
     fun localNow(): Long = clock.nowNs()
 
+    fun retryHosting() = nearby.restartAdvertising(name)
     fun accept(request: JoinRequest) = nearby.accept(request)
     fun decline(request: JoinRequest) = nearby.decline(request)
     fun redeliver(endpoint: EndpointId) = session.redeliver(endpoint)

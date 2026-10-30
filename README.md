@@ -6,24 +6,44 @@ same moment, with no internet or router needed.
 One phone hosts as the **master**. The others join as **followers** and pick a part. The master assigns
 PDFs to parts, sets the song, and presses Start. Phones talk directly over Google Nearby Connections.
 
+- **The right sheet for each part:** PDFs go only to the phones that need them, and a phone that already has one
+  isn't sent it again.
+- **One shared beat:** phones agree on a clock and work out every beat themselves, so nothing depends on a message
+  arriving in time.
+- **An arrow on the tab:** it shows what to play and scrolls the page to keep up.
+- **Tempo for each instrument:** tempo and time signature changes can be read from each part's PDF.
+- **A song library:** load a ready-made song in one tap, with its tabs and tempo presets.
+
 ## Run it
 
-Install `BandSync-debug.apk` on every phone, or build it:
+Build the app:
 
 ```bash
 ./gradlew :app:assembleDebug
 ```
 
-You need Android Studio or Android SDK platform 37, plus JDK 17 or newer. Open this folder in Android Studio
-and it fills in the SDK path. Phones need Android 8.0 or newer with Google Play services.
+Then install `app/build/outputs/apk/debug/app-debug.apk` on every phone. You need Android Studio or Android SDK
+platform 37, plus JDK 17 or newer. Open this folder in Android Studio and it fills in the SDK path.
 
-Nearby Connections doesn't work on emulators, so trying the real thing takes at least two physical phones.
+Phones need Android 8.0 or newer with Google Play services, with Bluetooth, Wi-Fi and Location switched on. Nearby
+Connections doesn't work on emulators, so trying the real thing takes at least two physical phones.
+
+Tabs aren't included in this repository, because they're commercial. A build from a fresh clone has an empty song
+library, so add your own PDFs as described under [Song library](#song-library), or use **Add PDFs** in the app.
 
 ```bash
 ./gradlew :core:test
 ```
 
-The tests in `:core` cover the timing, protocol and session logic. They need only a JDK, no Android SDK.
+The tests in `:core` cover the timing, protocol and session logic. They need only a JDK, no Android SDK. Tests that
+read real tabs are skipped when the library isn't there.
+
+## What's been tested
+
+- **On real phones:** the sheet viewer, the arrow, per-part tempos and joining two Android 13+ phones. Sync accuracy
+  hasn't been measured on real phones yet.
+- **In the tests:** clock sync, the timeline, the session protocol, and the PDF reader against real tabs. Timing
+  figures below come from a simulator.
 
 ## Using it
 
@@ -40,6 +60,16 @@ count-in at that section's tempo. The master can't change the song while it is p
 The metronome keeps going after the last bar until someone presses **Stop**.
 
 The master's Band tab shows each phone's sync as `±N ms`, the most its clock can be off the master's.
+
+### If phones can't find each other
+
+The joining phone and the master's Band tab both show a status card while they wait: whether Nearby started, the
+exact error if it didn't, and whether Bluetooth, Wi-Fi, Location, permissions and Google Play services are ready.
+Fix anything marked ✗, and tap **Try again** on both phones.
+
+Location has to be switched on as well as allowed, with precise location chosen. The app asks for more than Google's
+Nearby documentation lists, because two Android 13+ phones couldn't find each other with that list. The master also
+stops being visible while a song is playing, so pause or stop it for a phone to join.
 
 ### Parts on different tempos
 

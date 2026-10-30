@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The list from the Nearby Connections documentation, including its per-version limits. -->
-    <uses-permission android:maxSdkVersion="32" android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:maxSdkVersion="32" android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!--
+        Broader than the Nearby Connections documentation, which drops the Wi-Fi state and location permissions
+        at Android 13 and flags scanning as never used for location. Following that list exactly, phones on
+        Android 13 and newer couldn't find each other, so location and Wi-Fi state are kept on every version.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH" />
     <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:maxSdkVersion="32" android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:minSdkVersion="29" android:maxSdkVersion="32" android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:minSdkVersion="31" android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:minSdkVersion="31" android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:minSdkVersion="31" android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
-    <uses-permission android:minSdkVersion="33" android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:minSdkVersion="31" android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:minSdkVersion="33" android:name="android.permission.NEARBY_WIFI_DEVICES" />
     <uses-permission android:minSdkVersion="37" android:name="android.permission.ACCESS_LOCAL_NETWORK" />
     <uses-permission android:maxSdkVersion="32" android:name="android.permission.READ_EXTERNAL_STORAGE" />
 

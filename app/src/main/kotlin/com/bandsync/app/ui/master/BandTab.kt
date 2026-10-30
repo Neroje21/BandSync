@@ -8,20 +8,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.bandsync.app.net.JoinRequest
+import com.bandsync.app.net.RadioState
 import com.bandsync.app.session.MasterViewModel
+import com.bandsync.app.ui.common.ConnectionStatus
 import com.bandsync.app.ui.common.formatUncertainty
 import com.bandsync.core.metronome.TransportState
 import com.bandsync.core.session.DeliveryState
@@ -29,7 +26,7 @@ import com.bandsync.core.session.MasterState
 import com.bandsync.core.session.Member
 
 @Composable
-fun BandTab(state: MasterState, joinRequests: List<JoinRequest>, viewModel: MasterViewModel) {
+fun BandTab(state: MasterState, radio: RadioState, viewModel: MasterViewModel) {
     LazyColumn(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -42,33 +39,13 @@ fun BandTab(state: MasterState, joinRequests: List<JoinRequest>, viewModel: Mast
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        items(joinRequests, key = { "request-${it.endpoint}" }) { request ->
-            JoinRequestCard(
-                request,
-                onAccept = { viewModel.accept(request) },
-                onDecline = { viewModel.decline(request) },
-            )
-        }
-        if (state.members.isEmpty() && joinRequests.isEmpty()) {
-            item { Text("Waiting for phones to join…", style = MaterialTheme.typography.titleMedium) }
+        if (state.members.isEmpty()) {
+            item {
+                ConnectionStatus(radio, "Visible to nearby phones. Waiting for one to join…", viewModel::retryHosting)
+            }
         }
         items(state.members.values.toList(), key = { it.endpoint }) { member ->
             MemberCard(member, onResend = { viewModel.redeliver(member.endpoint) })
-        }
-    }
-}
-
-@Composable
-private fun JoinRequestCard(request: JoinRequest, onAccept: () -> Unit, onDecline: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("${request.name} wants to join", style = MaterialTheme.typography.titleMedium)
-            Text("Check their phone shows this code:")
-            Text(request.code, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onAccept) { Text("Accept") }
-                OutlinedButton(onClick = onDecline) { Text("Decline") }
-            }
         }
     }
 }

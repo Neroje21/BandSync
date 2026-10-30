@@ -98,8 +98,8 @@ fun HomeScreen(onHost: () -> Unit, onJoin: () -> Unit) {
 
             if (denied) {
                 Text(
-                    "BandSync needs the Nearby devices permission to find the other phones. " +
-                        "Older Android versions call it Location. Nothing is tracked.",
+                    "BandSync needs the Nearby devices and precise Location permissions to find the other " +
+                        "phones. Nothing is tracked.",
                     color = MaterialTheme.colorScheme.error,
                 )
                 TextButton(

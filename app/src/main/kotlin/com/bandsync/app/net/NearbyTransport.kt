@@ -52,6 +52,14 @@ data class DiscoveredHost(val endpoint: EndpointId, val name: String)
 /** [code] is shown on both phones. Comparing them proves the master is talking to the right person. */
 data class JoinRequest(val endpoint: EndpointId, val name: String, val code: String)
 
+/** Whether this phone is advertising or scanning. Kept on screen, because a brief message is easily missed. */
+sealed interface RadioState {
+    data object Idle : RadioState
+    data object Starting : RadioState
+    data object Active : RadioState
+    data class Failed(val reason: String) : RadioState
+}
+
 /** Nearby Connections behind the [Transport] interface. All of its callbacks run on the main thread. */
 class NearbyTransport(
     private val context: Context,
@@ -74,9 +82,13 @@ class NearbyTransport(
     private val _errors = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val errors: SharedFlow<String> = _errors.asSharedFlow()
 
+    private val _radio = MutableStateFlow<RadioState>(RadioState.Idle)
+    val radio: StateFlow<RadioState> = _radio.asStateFlow()
+
     private val incomingFiles = HashMap<Long, Payload>()
     private val outgoingFiles = HashSet<Long>()
     private var advertising = false
+    private var discovering = false
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
@@ -123,8 +135,7 @@ class NearbyTransport(
             _pairingCode.value = null
             when (resolution.status.statusCode) {
                 ConnectionsStatusCodes.STATUS_OK -> {
-                    connections.stopDiscovery() // Scanning competes with the link for the radio.
-                    _hosts.value = emptyList()
+                    stopDiscovery() // Scanning competes with the link for the radio.
                     listener?.onConnected(endpointId)
                 }
                 ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> _errors.tryEmit("The master declined the request")
@@ -153,21 +164,51 @@ class NearbyTransport(
     fun startAdvertising(name: String) {
         if (advertising) return
         advertising = true
+        _radio.value = RadioState.Starting
         val options = AdvertisingOptions.Builder().setStrategy(STRATEGY).build()
-        connections.startAdvertising(name, SERVICE_ID, lifecycleCallback, options).addOnFailureListener {
-            advertising = false
-            report(it)
-        }
+        connections.startAdvertising(name, SERVICE_ID, lifecycleCallback, options)
+            .addOnSuccessListener { _radio.value = RadioState.Active }
+            .addOnFailureListener { failure ->
+                advertising = isHarmless(failure)
+                setRadioFailed(failure)
+            }
     }
 
     fun stopAdvertising() {
         advertising = false
+        _radio.value = RadioState.Idle
         connections.stopAdvertising()
     }
 
+    /** Clears any state left over in Play services, which can quietly stop a phone being found. */
+    fun restartAdvertising(name: String) {
+        stopAdvertising()
+        startAdvertising(name)
+    }
+
     fun startDiscovery() {
+        discovering = true
+        _radio.value = RadioState.Starting
         val options = DiscoveryOptions.Builder().setStrategy(STRATEGY).build()
-        connections.startDiscovery(SERVICE_ID, discoveryCallback, options).addOnFailureListener(::report)
+        connections.startDiscovery(SERVICE_ID, discoveryCallback, options)
+            .addOnSuccessListener { _radio.value = RadioState.Active }
+            .addOnFailureListener { failure ->
+                discovering = isHarmless(failure)
+                setRadioFailed(failure)
+            }
+    }
+
+    private fun stopDiscovery() {
+        if (!discovering) return
+        discovering = false
+        _radio.value = RadioState.Idle
+        _hosts.value = emptyList()
+        connections.stopDiscovery()
+    }
+
+    fun restartDiscovery() {
+        stopDiscovery()
+        startDiscovery()
     }
 
     fun requestConnection(name: String, endpoint: EndpointId) {
@@ -209,10 +250,19 @@ class NearbyTransport(
     }
 
     private fun report(failure: Exception) {
-        val code = (failure as? ApiException)?.statusCode
-        if (code in HARMLESS_CODES) return
-        val detail = code?.let(ConnectionsStatusCodes::getStatusCodeString) ?: failure.message
-        _errors.tryEmit("Nearby Connections: $detail")
+        if (!isHarmless(failure)) _errors.tryEmit("Nearby Connections: ${describe(failure)}")
+    }
+
+    private fun setRadioFailed(failure: Exception) {
+        _radio.value = if (isHarmless(failure)) RadioState.Active else RadioState.Failed(describe(failure))
+    }
+
+    private fun isHarmless(failure: Exception): Boolean = (failure as? ApiException)?.statusCode in HARMLESS_CODES
+
+    /** Gives the number as well as the name, because the number is what can be looked up. */
+    private fun describe(failure: Exception): String {
+        val code = (failure as? ApiException)?.statusCode ?: return failure.message.orEmpty()
+        return "${ConnectionsStatusCodes.getStatusCodeString(code)} ($code)"
     }
 
     /** Android 10 moved received files behind a content URI. */
