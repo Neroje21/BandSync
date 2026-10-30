@@ -56,10 +56,6 @@ data class RoleSheetMap(
     fun assign(role: Role, segment: SheetSegment): RoleSheetMap =
         copy(assignments = assignments + (role to (segmentsFor(role) + segment)))
 
-    /** For repeatable set-up: does nothing if the role already uses this file. */
-    fun assignOnce(role: Role, segment: SheetSegment): RoleSheetMap =
-        if (segmentsFor(role).any { it.fileId == segment.fileId }) this else assign(role, segment)
-
     fun unassign(role: Role, index: Int): RoleSheetMap =
         copy(assignments = assignments + (role to segmentsFor(role).filterIndexed { i, _ -> i != index }))
 

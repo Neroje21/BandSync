@@ -249,6 +249,27 @@ class SessionFlowTest {
     }
 
     @Test
+    fun `going back to an earlier song sends nothing again`() = runTest {
+        val first = RoleSheetMap().withFile(guitarSheet).assign(Role.GUITAR, SheetSegment(guitarSheet.id))
+        val second = RoleSheetMap().withFile(drumSheet).assign(Role.GUITAR, SheetSegment(drumSheet.id))
+        val (guitarist, _) = client("guitarist", Role.GUITAR)
+        network.connect("guitarist", guitarist)
+        settle()
+        session.updateSheets(first)
+        settle()
+        session.updateSheets(second)
+        settle()
+        val sent = network.filesSent.size
+
+        session.updateSheets(first)
+        settle()
+
+        assertEquals(sent, network.filesSent.size)
+        assertEquals(listOf(guitarSheet), guitarist.state.value.manifest?.files)
+        assertTrue(guitarist.state.value.sheetsReady)
+    }
+
+    @Test
     fun `a client locks onto the master clock`() = runTest {
         val (guitarist, _) = client("guitarist", Role.GUITAR)
         network.connect("guitarist", guitarist)

@@ -7,9 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.bandsync.app.BandSyncApp
 import com.bandsync.app.net.JoinRequest
 import com.bandsync.app.net.NearbyTransport
+import com.bandsync.app.pdf.LibrarySong
 import com.bandsync.app.pdf.PdfImporter
 import com.bandsync.app.pdf.SheetLayouts
-import com.bandsync.app.pdf.TestTabs
+import com.bandsync.app.pdf.SongLibrary
 import com.bandsync.core.metronome.MetronomeEngine
 import com.bandsync.core.metronome.TransportState
 import com.bandsync.core.protocol.SongConfig
@@ -51,7 +52,7 @@ class MasterViewModel(application: Application) : AndroidViewModel(application) 
 
     val store: SheetStore = app.store
     val sheetLayouts: SheetLayouts = app.sheetLayouts
-    val hasTestTabs: Boolean = TestTabs.isAvailable(application)
+    val library: List<LibrarySong> = SongLibrary.songs(application)
     val state = session.state
     val joinRequests = nearby.joinRequests
     val ticks = engine.ticks
@@ -92,25 +93,28 @@ class MasterViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /** Safe to tap twice: files are stored by content, and a part that already has its tab keeps it once. */
-    fun loadTestTabs() {
+    /**
+     * Replaces whatever is loaded, because one part holding two songs' sheets is never what anyone wants. Each
+     * instrument's tempo is preset from its tab. Only the count-in carries over, since that's the band's choice.
+     */
+    fun loadSong(song: LibrarySong) {
         viewModelScope.launch {
-            val tabs = try {
+            val sheets = try {
                 withContext(Dispatchers.IO) {
-                    TestTabs.all.map { it.role to importer.importAsset(it.assetPath, it.displayName) }
+                    song.sheets.fold(RoleSheetMap()) { map, sheet ->
+                        val file = importer.importAsset(sheet.assetPath, sheet.displayName)
+                        map.withFile(file).assign(sheet.part, SheetSegment(file.id))
+                    }
                 }
             } catch (_: IOException) {
-                notices.tryEmit("Couldn't load the test tabs")
+                notices.tryEmit("Couldn't load ${song.title}")
                 return@launch
             }
-            editSheets { sheets ->
-                tabs.fold(sheets) { map, (role, file) ->
-                    map.withFile(file).assignOnce(role, SheetSegment(file.id))
-                }
-            }
-            val sheets = session.state.value.sheets
+            session.updateSheets(sheets)
             val printed = withContext(Dispatchers.IO) { markedSheetsByPart(sheets) }
-            session.updateSong(TestTabs.song.withPrintedTempos(printed))
+            val countInBars = session.state.value.song.countInBars
+            session.updateSong(SongConfig(title = song.title, countInBars = countInBars).withPrintedTempos(printed))
+            notices.tryEmit("${song.title} loaded")
         }
     }
 

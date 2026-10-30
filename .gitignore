@@ -10,4 +10,4 @@ local.properties
 captures/
 
 # Commercial tabs, for local testing only.
-app/src/debug/assets/test-tabs/
+app/src/debug/assets/library/

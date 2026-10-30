@@ -264,19 +264,19 @@ class BarLayoutParserTest {
 /** Checks the real test tabs when they're on this machine. They're gitignored, so a fresh clone skips these. */
 class RealTabLayoutTest {
     private fun layoutOf(name: String): BarLayout? {
-        val file = File("../app/src/debug/assets/test-tabs/$name")
+        val file = File("../app/src/debug/assets/library/Iron Man/$name")
         return if (file.exists()) assertNotNull(BarLayoutParser.parse(file.readBytes()), name) else null
     }
 
     @Test
     fun `every bar of the drum tab is found`() {
-        val layout = layoutOf("iron-man-drums.pdf") ?: return
+        val layout = layoutOf("drums.pdf") ?: return
         assertEquals((1..149).toList(), layout.cells.map { it.bar })
     }
 
     @Test
     fun `the bar positions match what was measured from the PDF`() {
-        val layout = layoutOf("iron-man-drums.pdf") ?: return
+        val layout = layoutOf("drums.pdf") ?: return
         val bar = { n: Int -> layout.cells.first { it.bar == n } }
 
         assertEquals(41.8f / 594.96f, bar(7).startX, 0.002f)
@@ -287,7 +287,7 @@ class RealTabLayoutTest {
 
     @Test
     fun `tabs with long rests still reach the last bar`() {
-        for (name in listOf("iron-man-bass.pdf", "iron-man-guitar.pdf")) {
+        for (name in listOf("bass.pdf", "guitar.pdf")) {
             val layout = layoutOf(name) ?: return
             assertEquals(149, layout.cells.last().bar, name)
             assertTrue(layout.cells.zipWithNext().all { (a, b) -> a.bar < b.bar }, name)
@@ -296,7 +296,7 @@ class RealTabLayoutTest {
 
     @Test
     fun `the arrow crosses the whole song without losing its place`() {
-        for (name in listOf("iron-man-bass.pdf", "iron-man-drums.pdf", "iron-man-guitar.pdf")) {
+        for (name in listOf("bass.pdf", "drums.pdf", "guitar.pdf")) {
             val layout = layoutOf(name) ?: return
             val lastBeat = ironMan.firstBeatOfBar(150)
             val path = (0 until lastBeat * 4).map { layout.locate(it / 4.0, ironMan) }

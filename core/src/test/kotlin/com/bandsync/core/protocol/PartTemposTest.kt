@@ -228,7 +228,7 @@ class PrintedTemposTest {
 /** Checks the real test tabs when they're on this machine. They're gitignored, so a fresh clone skips these. */
 class RealTabTemposTest {
     private fun layoutOf(name: String): BarLayout? {
-        val file = File("../app/src/debug/assets/test-tabs/iron-man-$name.pdf")
+        val file = File("../app/src/debug/assets/library/Iron Man/$name.pdf")
         return if (file.exists()) assertNotNull(BarLayoutParser.parse(file.readBytes()), name) else null
     }
 

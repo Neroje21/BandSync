@@ -69,15 +69,6 @@ class RoleSheetMapTest {
     }
 
     @Test
-    fun `assignOnce only adds a file the role doesn't already use`() {
-        val again = map.assignOnce(Role.BASS, SheetSegment("s"))
-        assertEquals(map.segmentsFor(Role.BASS), again.segmentsFor(Role.BASS))
-
-        val added = map.assignOnce(Role.DRUMS, SheetSegment("s"))
-        assertEquals(listOf(SheetSegment("s")), added.segmentsFor(Role.DRUMS))
-    }
-
-    @Test
     fun `removing a file removes its segments everywhere`() {
         val without = map.withoutFile("s")
         assertEquals(listOf(SheetSegment("g", listOf(2, 0))), without.segmentsFor(Role.GUITAR))

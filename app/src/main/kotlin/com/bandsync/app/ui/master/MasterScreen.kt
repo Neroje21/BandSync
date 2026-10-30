@@ -24,14 +24,22 @@ import com.bandsync.app.ui.common.KeepScreenOn
 import com.bandsync.app.ui.common.LeaveGuard
 import com.bandsync.app.ui.common.ShowMessages
 
-private val TABS = listOf("Band", "Song", "Live")
+private enum class MasterTab(val title: String) {
+    BAND("Band"),
+    LIBRARY("Library"),
+    SONG("Song"),
+    LIVE("Live"),
+}
 
 @Composable
 fun MasterScreen(onLeave: () -> Unit, viewModel: MasterViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val joinRequests by viewModel.joinRequests.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val tabs = remember(viewModel) {
+        MasterTab.entries.filter { it != MasterTab.LIBRARY || viewModel.library.isNotEmpty() }
+    }
+    var selected by rememberSaveable { mutableIntStateOf(0) }
 
     KeepScreenOn()
     ShowMessages(viewModel.messages, snackbar)
@@ -39,16 +47,17 @@ fun MasterScreen(onLeave: () -> Unit, viewModel: MasterViewModel = viewModel()) 
 
     Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            PrimaryTabRow(selectedTabIndex = tab) {
-                TABS.forEachIndexed { index, title ->
-                    Tab(selected = tab == index, onClick = { tab = index }, text = { Text(title) })
+            PrimaryTabRow(selectedTabIndex = selected) {
+                tabs.forEachIndexed { index, tab ->
+                    Tab(selected = selected == index, onClick = { selected = index }, text = { Text(tab.title) })
                 }
             }
             Box(Modifier.weight(1f)) {
-                when (tab) {
-                    0 -> BandTab(state, joinRequests, viewModel)
-                    1 -> SongTab(state, viewModel)
-                    else -> LiveTab(state, viewModel)
+                when (tabs[selected]) {
+                    MasterTab.BAND -> BandTab(state, joinRequests, viewModel)
+                    MasterTab.LIBRARY -> LibraryTab(state, viewModel)
+                    MasterTab.SONG -> SongTab(state, viewModel)
+                    MasterTab.LIVE -> LiveTab(state, viewModel)
                 }
             }
         }

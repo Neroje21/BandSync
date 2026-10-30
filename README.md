@@ -75,16 +75,25 @@ The arrow lands on the first note of every bar. Within a bar it moves evenly by 
 extra width, so it can sit a little ahead of or behind individual notes there. Repeat signs aren't followed: the
 arrow reads straight through the printed bars.
 
-### Test tabs
+### Song library
 
-Debug builds can include a sample song, so testing doesn't need PDFs on the master phone. On the **Song** tab,
-**Load test tabs (Iron Man)** imports the guitar, bass and drum tabs, assigns each to its part, and loads the song
-with the tempo marks and time signatures read from the tabs. That makes it a good test of tempo changes: eight
-tempos from 65 to 168 BPM, plus a single 2/4 bar at bar 8. Guitar, Bass and Drums each get their own list. Vocals
-and Keys get no sheet, which is a handy way to see the follower's waiting screen, and follow what the tabs agree on.
+Debug builds can include ready-to-play songs, so a rehearsal doesn't start with copying PDFs to the master phone.
+On the master's **Library** tab, **Load** sends each part its tab and presets every instrument's tempo and time
+signature changes from the tabs. It replaces whatever was loaded, and **Reload** gets back to the preset after
+editing a song. A song has to be stopped before another can load. Phones keep what they've received, so going back
+to an earlier song sends nothing again. The count-in setting carries over from song to song.
 
-The PDFs live in `app/src/debug/assets/test-tabs/`. They are commercial tabs, so they're gitignored and never
-go into a release build. Without them the button doesn't appear.
+Parts with no tab, such as Vocals and Keys here, get no sheet and follow what the tabs agree on.
+
+| Song | Tempo | Time signature | Bars |
+| --- | --- | --- | --- |
+| Iron Man | Eight tempos, 65 to 168 BPM | 4/4, with a 2/4 bar at bar 8 | 149 |
+| Paranoid | 163 BPM | 4/4 | 112 |
+| Seven Nation Army | 124 BPM | 4/4 | 117 |
+
+To add a song, make a folder named after it in `app/src/debug/assets/library/`, put in one PDF per part named after
+the part (`guitar.pdf`, `bass.pdf`, `drums.pdf`, `vocals.pdf`, `keys.pdf` or `other.pdf`), and rebuild. The PDFs are
+commercial tabs, so that folder is gitignored and never goes into a release build. Without it the tab doesn't appear.
 
 ## How the timing works
 

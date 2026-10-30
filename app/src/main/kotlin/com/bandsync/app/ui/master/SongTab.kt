@@ -86,7 +86,7 @@ fun SongTab(state: MasterState, viewModel: MasterViewModel) {
         ) {
             Text("Read tempo from tabs")
         }
-        PdfLibrary(state.sheets, songEditable, viewModel)
+        PdfLibrary(state.sheets, viewModel)
         Role.entries.forEach { role ->
             RoleCard(role, state, viewModel)
         }
@@ -317,7 +317,7 @@ private fun TimeSignatureMenu(selected: TimeSignature, enabled: Boolean, onSelec
 }
 
 @Composable
-private fun PdfLibrary(sheets: RoleSheetMap, songEditable: Boolean, viewModel: MasterViewModel) {
+private fun PdfLibrary(sheets: RoleSheetMap, viewModel: MasterViewModel) {
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
         viewModel::addPdfs,
@@ -335,12 +335,6 @@ private fun PdfLibrary(sheets: RoleSheetMap, songEditable: Boolean, viewModel: M
     }
     Button(onClick = { picker.launch(arrayOf("application/pdf")) }, Modifier.fillMaxWidth()) {
         Text("Add PDFs")
-    }
-    if (viewModel.hasTestTabs) {
-        // It also sets the tempo, so it waits for the song to stop just as the tempo field does.
-        OutlinedButton(onClick = viewModel::loadTestTabs, Modifier.fillMaxWidth(), enabled = songEditable) {
-            Text("Load test tabs (Iron Man)")
-        }
     }
 }
 
