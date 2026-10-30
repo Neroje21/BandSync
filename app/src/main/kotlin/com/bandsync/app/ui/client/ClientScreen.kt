@@ -159,7 +159,8 @@ private fun SessionHeader(role: Role, state: ClientState) {
         Text(
             listOfNotNull(
                 song?.title?.ifBlank { null },
-                song?.let { "${it.bpm} BPM ${it.timeSignature.label}" },
+                // A song with changes has no one tempo to name. The readout above shows the current one.
+                song?.takeIf { it.changes.isEmpty() }?.let { "${it.bpm} BPM ${it.timeSignature.label}" },
             ).joinToString(" · ").ifEmpty { role.label },
             style = MaterialTheme.typography.titleSmall,
         )

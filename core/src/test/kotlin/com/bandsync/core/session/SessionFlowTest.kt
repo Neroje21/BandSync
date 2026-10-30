@@ -1,6 +1,7 @@
 package com.bandsync.core.session
 
 import com.bandsync.core.metronome.TransportState
+import com.bandsync.core.protocol.SongChange
 import com.bandsync.core.protocol.SongConfig
 import com.bandsync.core.protocol.TimeSignature
 import com.bandsync.core.sheets.FileId
@@ -279,8 +280,43 @@ class SessionFlowTest {
         assertEquals(masterClock.ns + 2_000 * MS, timeline.startMasterNs)
         assertEquals(-6L, timeline.firstBeat)
         assertEquals(0L, timeline.playFromBeat)
-        assertEquals(100, timeline.bpm)
-        assertEquals(3, timeline.beatsPerBar)
+        assertEquals(100, timeline.bpmAt(0))
+        assertEquals(3, timeline.beatsPerBarAt(0))
+    }
+
+    @Test
+    fun `the whole tempo map reaches every phone`() = runTest {
+        val song = SongConfig(bpm = 90, changes = listOf(SongChange(5, 150, TimeSignature(3, 4))))
+        session.updateSong(song)
+        val (guitarist, _) = client("guitarist", Role.GUITAR)
+        network.connect("guitarist", guitarist)
+        settle()
+
+        session.start()
+        settle()
+
+        assertEquals(song, guitarist.state.value.song)
+        val timeline = assertIs<TransportState.Running>(guitarist.state.value.transport).timeline
+        assertEquals(song.toMap(), timeline.map)
+        assertEquals(session.state.value.transport, guitarist.state.value.transport)
+    }
+
+    @Test
+    fun `resuming in a later section counts in at that section's tempo and meter`() = runTest {
+        session.updateSong(
+            SongConfig(bpm = 120, changes = listOf(SongChange(3, 180, TimeSignature(3, 4)))),
+        )
+
+        session.start() // One bar of count-in at 120, then bars 1 and 2 at 120: bar 3 is 8 s after pressing start.
+        masterClock.ns += 8_000 * MS + 1_000 * MS // Into bar 4, once bar 3's three beats at 180 have gone by.
+        session.pause()
+        masterClock.ns += 1_000 * MS
+        session.start()
+
+        val resumed = assertIs<TransportState.Running>(session.state.value.transport).timeline
+        assertEquals(11L, resumed.playFromBeat, "bar 4 follows two bars of 4/4 and one of 3/4")
+        assertEquals(8L, resumed.firstBeat, "one bar of 3/4 count-in")
+        assertEquals(180, resumed.bpmAt(resumed.firstBeat))
     }
 
     @Test

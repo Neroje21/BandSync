@@ -4,9 +4,9 @@ package com.bandsync.core.metronome
 sealed interface Playhead {
     data object Stopped : Playhead
     data class Countdown(val tenthsLeft: Long) : Playhead
-    data class CountIn(val count: Int, val beatsPerBar: Int, val beatsLeft: Long) : Playhead
-    data class Playing(val bar: Long, val beat: Int, val beatsPerBar: Int, val seconds: Long) : Playhead
-    data class Paused(val bar: Long, val beat: Int, val beatsPerBar: Int, val seconds: Long) : Playhead
+    data class CountIn(val count: Int, val beatsPerBar: Int, val bpm: Int, val beatsLeft: Long) : Playhead
+    data class Playing(val bar: Long, val beat: Int, val beatsPerBar: Int, val bpm: Int, val seconds: Long) : Playhead
+    data class Paused(val bar: Long, val beat: Int, val beatsPerBar: Int, val bpm: Int, val seconds: Long) : Playhead
 }
 
 fun playheadAt(transport: TransportState, masterNs: Long): Playhead = when (transport) {
@@ -20,7 +20,8 @@ fun playheadAt(transport: TransportState, masterNs: Long): Playhead = when (tran
             Playhead.Paused(
                 bar = timeline.barOf(transport.beat),
                 beat = timeline.beatInBar(transport.beat),
-                beatsPerBar = timeline.beatsPerBar,
+                beatsPerBar = timeline.beatsPerBarAt(transport.beat),
+                bpm = timeline.bpmAt(transport.beat),
                 seconds = timeline.secondsAt(transport.beat),
             )
         }
@@ -35,14 +36,16 @@ private fun runningPlayhead(timeline: Timeline, masterNs: Long): Playhead {
     return if (timeline.isCountIn(beat)) {
         Playhead.CountIn(
             count = timeline.beatInBar(beat),
-            beatsPerBar = timeline.beatsPerBar,
+            beatsPerBar = timeline.beatsPerBarAt(beat),
+            bpm = timeline.bpmAt(beat),
             beatsLeft = timeline.playFromBeat - beat,
         )
     } else {
         Playhead.Playing(
             bar = timeline.barOf(beat),
             beat = timeline.beatInBar(beat),
-            beatsPerBar = timeline.beatsPerBar,
+            beatsPerBar = timeline.beatsPerBarAt(beat),
+            bpm = timeline.bpmAt(beat),
             seconds = timeline.secondsAt(beat),
         )
     }

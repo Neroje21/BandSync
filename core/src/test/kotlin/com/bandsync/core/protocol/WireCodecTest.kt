@@ -1,5 +1,6 @@
 package com.bandsync.core.protocol
 
+import com.bandsync.core.metronome.MAX_BPM
 import com.bandsync.core.metronome.Timeline
 import com.bandsync.core.sheets.Role
 import com.bandsync.core.sheets.SheetFile
@@ -11,7 +12,14 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class WireCodecTest {
-    private val timeline = Timeline(Long.MAX_VALUE / 2, -4, 0, 120, 4)
+    private val map = SongConfig(
+        bpm = 97,
+        changes = listOf(
+            SongChange(5, 168, TimeSignature(4, 4)),
+            SongChange(9, 61, TimeSignature(3, 4)),
+        ),
+    ).toMap()
+    private val timeline = Timeline(Long.MAX_VALUE / 2, -4, 0, map)
 
     @Test
     fun `every message survives a round trip`() {
@@ -22,7 +30,15 @@ class WireCodecTest {
             WireMessage.NeedFiles(2, listOf("a", "b")),
             WireMessage.FileReceived("a", ok = true),
             WireMessage.SyncReport(1_500_000),
-            WireMessage.SongInfo(SongConfig("Song", 96, TimeSignature(6, 8), countInBars = 2)),
+            WireMessage.SongInfo(
+                SongConfig(
+                    title = "Song",
+                    bpm = 96,
+                    timeSignature = TimeSignature(6, 8),
+                    countInBars = 2,
+                    changes = listOf(SongChange(9, 140, TimeSignature(4, 4))),
+                ),
+            ),
             WireMessage.Sheets(
                 SheetManifest(
                     revision = 2,
@@ -38,6 +54,27 @@ class WireCodecTest {
         )
 
         messages.forEach { assertEquals(it, WireCodec.decode(WireCodec.encode(it))) }
+    }
+
+    /** The section start times aren't sent, so every phone has to rebuild identical ones from what is. */
+    @Test
+    fun `a received timeline computes exactly the same beats`() {
+        val received = (WireCodec.decode(WireCodec.encode(WireMessage.StartAt(timeline))) as WireMessage.StartAt).timeline
+
+        for (beat in -4L..200) {
+            assertEquals(timeline.masterTimeOf(beat), received.masterTimeOf(beat), "beat $beat")
+            assertEquals(timeline.beatInBar(beat), received.beatInBar(beat), "beat $beat")
+        }
+    }
+
+    @Test
+    fun `a song with many tempo changes fits inside a BYTES payload`() {
+        val changes = (2..300).map { SongChange(it, MAX_BPM, TimeSignature(12, 8)) }
+        val busy = Timeline(Long.MAX_VALUE / 2, -24, 0, SongConfig(changes = changes).toMap())
+
+        val bytes = WireCodec.encode(WireMessage.StartAt(busy))
+
+        assertTrue(bytes.size < 32_768, "StartAt is ${bytes.size} bytes")
     }
 
     @Test

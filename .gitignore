@@ -8,3 +8,6 @@ local.properties
 *.aab
 *.keystore
 captures/
+
+# Commercial tabs, for local testing only.
+app/src/debug/assets/test-tabs/

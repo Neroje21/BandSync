@@ -1,5 +1,7 @@
 package com.bandsync.core.protocol
 
+import com.bandsync.core.metronome.SongMap
+import com.bandsync.core.metronome.SongSection
 import com.bandsync.core.metronome.Timeline
 import com.bandsync.core.sheets.FileId
 import com.bandsync.core.sheets.Role
@@ -14,13 +16,34 @@ data class TimeSignature(val beatsPerBar: Int, val beatUnit: Int) {
     val label: String get() = "$beatsPerBar/$beatUnit"
 }
 
+/** From [bar] on, the song has this tempo and time signature, until the next change. */
+@Serializable
+data class SongChange(val bar: Int, val bpm: Int, val timeSignature: TimeSignature)
+
+/** [bpm] and [timeSignature] are how the song opens. */
 @Serializable
 data class SongConfig(
     val title: String = "",
     val bpm: Int = 120,
     val timeSignature: TimeSignature = TimeSignature(4, 4),
     val countInBars: Int = 1,
-)
+    val changes: List<SongChange> = emptyList(),
+) {
+    /** Changes can be in any order. If two share a bar the later one wins; the opening values own bar 1. */
+    fun toMap(): SongMap {
+        val sections = mutableListOf(SongSection(1, 0, bpm, timeSignature.beatsPerBar))
+        changes.filter { it.bar > 1 }.associateBy { it.bar }.toSortedMap().values.forEach { change ->
+            val previous = sections.last()
+            sections += SongSection(
+                fromBar = change.bar.toLong(),
+                fromBeat = previous.fromBeat + (change.bar - previous.fromBar) * previous.beatsPerBar,
+                bpm = change.bpm,
+                beatsPerBar = change.timeSignature.beatsPerBar,
+            )
+        }
+        return SongMap(sections)
+    }
+}
 
 @Serializable
 sealed interface WireMessage {

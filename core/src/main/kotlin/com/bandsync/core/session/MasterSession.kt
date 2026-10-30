@@ -71,17 +71,17 @@ class MasterSession(
     fun start() {
         val current = _state.value
         val song = current.song
-        val beatsPerBar = song.timeSignature.beatsPerBar
+        val map = song.toMap()
+        // Resuming goes by bar number, which still means the same place if the song was edited while paused.
         val playFromBeat = when (val paused = current.transport) {
-            is TransportState.Paused -> (paused.timeline.barOf(paused.beat) - 1) * beatsPerBar
+            is TransportState.Paused -> map.firstBeatOfBar(paused.timeline.barOf(paused.beat))
             else -> 0L
         }
         val timeline = Timeline(
             startMasterNs = clock.nowNs() + START_LEAD_NS,
-            firstBeat = playFromBeat - song.countInBars * beatsPerBar,
+            firstBeat = playFromBeat - song.countInBars * map.sectionAt(playFromBeat).beatsPerBar,
             playFromBeat = playFromBeat,
-            bpm = song.bpm,
-            beatsPerBar = beatsPerBar,
+            map = map,
         )
         _state.update { it.copy(transport = TransportState.Running(timeline)) }
         broadcast(WireMessage.StartAt(timeline))

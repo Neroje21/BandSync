@@ -48,7 +48,7 @@ class BandSimulationTest {
     private fun worstErrorNs(
         link: LinkModel,
         keepSyncing: Boolean,
-        bpm: Int = 120,
+        map: SongMap = SongMap.steady(bpm = 120, beatsPerBar = 4),
         beats: Long = 600,
     ): Long {
         val syncs = phones.map { ClockSync { 0 } }
@@ -64,14 +64,14 @@ class BandSimulationTest {
         repeat(16) { ping -> phones.indices.forEach { exchange(it, ping * 50 * MS) } }
 
         val songStartTrueNs = 3_000 * MS
-        val timeline = Timeline(master.read(songStartTrueNs), 0, 0, bpm, beatsPerBar = 4)
-        val periodNs = 60_000 * MS / bpm
+        val timeline = Timeline(master.read(songStartTrueNs), 0, 0, map)
         var worstNs = 0L
 
         for (beat in 0 until beats) {
             val masterNs = timeline.masterTimeOf(beat)
             val masterFlashTrueNs = master.trueTimeOf(masterNs)
-            if (keepSyncing && beat % (500 * MS / periodNs).coerceAtLeast(1) == 0L) {
+            if (keepSyncing) {
+                val periodNs = timeline.masterTimeOf(beat + 1) - masterNs
                 phones.indices.forEach { exchange(it, masterFlashTrueNs - periodNs / 2) }
             }
             phones.forEachIndexed { index, phone ->
@@ -100,6 +100,16 @@ class BandSimulationTest {
 
         println("bluetooth-style link, worst flash error ${worst / 1_000} us")
         assertTrue(worst < 12 * MS, "worst flash error $worst ns")
+    }
+
+    @Test
+    fun `tempo changes make no difference to how close the phones stay`() {
+        val link = LinkModel(2 * MS, 2 * MS, stallChance = 0.05, maxStallNs = 150 * MS, Random(1))
+
+        val worst = worstErrorNs(link, keepSyncing = true, map = ironMan, beats = 594)
+
+        println("wifi-style link across Iron Man's tempo map, worst flash error ${worst / 1_000} us")
+        assertTrue(worst < 3 * MS, "worst flash error $worst ns")
     }
 
     @Test

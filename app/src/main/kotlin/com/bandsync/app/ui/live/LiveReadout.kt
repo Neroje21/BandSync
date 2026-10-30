@@ -162,9 +162,9 @@ private fun barText(playhead: Playhead): String = when (playhead) {
 private fun statusText(playhead: Playhead): String = when (playhead) {
     Playhead.Stopped -> "STOPPED"
     is Playhead.Countdown -> "STARTING"
-    is Playhead.CountIn -> "COUNT-IN"
-    is Playhead.Playing -> "PLAYING"
-    is Playhead.Paused -> "PAUSED"
+    is Playhead.CountIn -> "COUNT-IN · ${playhead.bpm} BPM"
+    is Playhead.Playing -> "PLAYING · ${playhead.bpm} BPM"
+    is Playhead.Paused -> "PAUSED · ${playhead.bpm} BPM"
 }
 
 private fun timeText(playhead: Playhead): String {

@@ -2,42 +2,45 @@ package com.bandsync.core.metronome
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-
-private const val NS_PER_MINUTE = 60_000_000_000L
+import kotlinx.serialization.Transient
 
 const val MIN_BPM = 20
 const val MAX_BPM = 300
 
 /**
  * The band's shared timeline: a pure function from master time to beat, so every phone can work out any
- * beat by itself and no per-beat message ever crosses the network.
+ * beat by itself and no per-beat message ever crosses the network, tempo changes included.
  *
- * Beat 0 is bar 1, beat 1. [firstBeat] sounds at [startMasterNs]; beats before [playFromBeat] are the
- * count-in. Both are always on a bar line, so bar arithmetic holds for negative beats too.
+ * [firstBeat] sounds at [startMasterNs]. Beats before [playFromBeat] are the count-in, which runs at the tempo
+ * and meter of the place the song is about to play from, so resuming into a fast section counts in fast.
+ * From [playFromBeat] on, [map] decides everything.
  */
 @Serializable
 data class Timeline(
     val startMasterNs: Long,
     val firstBeat: Long,
     val playFromBeat: Long,
-    val bpm: Int,
-    val beatsPerBar: Int,
+    val map: SongMap,
 ) {
-    init {
-        require(bpm > 0) { "bpm must be positive" }
-        require(beatsPerBar > 0) { "beatsPerBar must be positive" }
+    @Transient
+    private val playSection: SongSection = map.sectionAt(playFromBeat)
+
+    @Transient
+    private val playMasterNs: Long = startMasterNs + durationNs(playFromBeat - firstBeat, playSection.bpm)
+
+    /** Computed from the beat number every time, never from the previous beat, so rounding can't accumulate. */
+    fun masterTimeOf(beat: Long): Long = if (isCountIn(beat)) {
+        startMasterNs + durationNs(beat - firstBeat, playSection.bpm)
+    } else {
+        playMasterNs + map.timeOf(beat) - map.timeOf(playFromBeat)
     }
 
-    /**
-     * Computed from the beat number every time, never by adding a period to the previous beat, so rounding
-     * can't accumulate. Rounds up so that `beatAt(masterTimeOf(n)) == n` holds exactly.
-     */
-    fun masterTimeOf(beat: Long): Long =
-        startMasterNs - Math.floorDiv(-(beat - firstBeat) * NS_PER_MINUTE, bpm.toLong())
-
     /** The latest beat at or before [masterNs]. Below [firstBeat] until the metronome has started. */
-    fun beatAt(masterNs: Long): Long =
-        firstBeat + Math.floorDiv((masterNs - startMasterNs) * bpm, NS_PER_MINUTE)
+    fun beatAt(masterNs: Long): Long = if (masterNs < playMasterNs) {
+        firstBeat + Math.floorDiv((masterNs - startMasterNs) * playSection.bpm, NS_PER_MINUTE)
+    } else {
+        map.beatAt(masterNs - playMasterNs + map.timeOf(playFromBeat))
+    }
 
     /** The earliest beat at or after [masterNs]. */
     fun nextBeatFrom(masterNs: Long): Long {
@@ -45,10 +48,20 @@ data class Timeline(
         return if (masterTimeOf(beat) == masterNs) beat else beat + 1
     }
 
-    fun barOf(beat: Long): Long = Math.floorDiv(beat, beatsPerBar.toLong()) + 1
-    fun beatInBar(beat: Long): Int = Math.floorMod(beat, beatsPerBar.toLong()).toInt() + 1
     fun isCountIn(beat: Long): Boolean = beat < playFromBeat
-    fun secondsAt(beat: Long): Long = beat * 60 / bpm
+    fun barOf(beat: Long): Long = map.barOf(beat)
+    fun secondsAt(beat: Long): Long = map.secondsAt(beat)
+    fun bpmAt(beat: Long): Int = sectionFor(beat).bpm
+    fun beatsPerBarAt(beat: Long): Int = sectionFor(beat).beatsPerBar
+
+    /** The count-in ends on a bar line, so its bars are counted back from there. */
+    fun beatInBar(beat: Long): Int = if (isCountIn(beat)) {
+        Math.floorMod(beat - playFromBeat, playSection.beatsPerBar.toLong()).toInt() + 1
+    } else {
+        map.beatInBar(beat)
+    }
+
+    private fun sectionFor(beat: Long): SongSection = if (isCountIn(beat)) playSection else map.sectionAt(beat)
 }
 
 @Serializable

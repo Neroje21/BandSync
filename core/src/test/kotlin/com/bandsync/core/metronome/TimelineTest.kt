@@ -13,8 +13,7 @@ class TimelineTest {
         startMasterNs = 10 * SECOND,
         firstBeat = -4,
         playFromBeat = 0,
-        bpm = 120,
-        beatsPerBar = 4,
+        map = SongMap.steady(bpm = 120, beatsPerBar = 4),
     )
 
     @Test
@@ -27,7 +26,7 @@ class TimelineTest {
     @Test
     fun `rounding never accumulates`() {
         // 60e9 / 97 is not a whole number of nanoseconds, so repeated addition would creep.
-        val slow = timeline.copy(bpm = 97, firstBeat = 0)
+        val slow = Timeline(10 * SECOND, 0, 0, SongMap.steady(97, 4))
         val hours = 10L
         val beat = 97 * 60 * hours
 
@@ -37,7 +36,7 @@ class TimelineTest {
     @Test
     fun `beatAt inverts masterTimeOf at every tempo`() {
         for (bpm in MIN_BPM..MAX_BPM) {
-            val sample = timeline.copy(bpm = bpm)
+            val sample = timeline.copy(map = SongMap.steady(bpm, 4))
             for (beat in listOf(-4L, -1, 0, 1, 7, 1_000, 123_457)) {
                 val time = sample.masterTimeOf(beat)
                 assertEquals(beat, sample.beatAt(time), "bpm $bpm beat $beat")
@@ -78,17 +77,50 @@ class TimelineTest {
         val running = TransportState.Running(timeline)
 
         assertEquals(Playhead.Countdown(15), playheadAt(running, 8 * SECOND + SECOND / 2))
-        assertEquals(Playhead.CountIn(count = 1, beatsPerBar = 4, beatsLeft = 4), playheadAt(running, 10 * SECOND))
-        assertEquals(Playhead.CountIn(count = 4, beatsPerBar = 4, beatsLeft = 1), playheadAt(running, 11 * SECOND + SECOND / 2))
-        assertEquals(Playhead.Playing(bar = 1, beat = 1, beatsPerBar = 4, seconds = 0), playheadAt(running, 12 * SECOND))
-        assertEquals(Playhead.Playing(bar = 2, beat = 2, beatsPerBar = 4, seconds = 2), playheadAt(running, 14 * SECOND + SECOND / 2))
+        assertEquals(
+            Playhead.CountIn(count = 1, beatsPerBar = 4, bpm = 120, beatsLeft = 4),
+            playheadAt(running, 10 * SECOND),
+        )
+        assertEquals(
+            Playhead.CountIn(count = 4, beatsPerBar = 4, bpm = 120, beatsLeft = 1),
+            playheadAt(running, 11 * SECOND + SECOND / 2),
+        )
+        assertEquals(
+            Playhead.Playing(bar = 1, beat = 1, beatsPerBar = 4, bpm = 120, seconds = 0),
+            playheadAt(running, 12 * SECOND),
+        )
+        assertEquals(
+            Playhead.Playing(bar = 2, beat = 2, beatsPerBar = 4, bpm = 120, seconds = 2),
+            playheadAt(running, 14 * SECOND + SECOND / 2),
+        )
 
         val paused = TransportState.Paused(timeline, atMasterNs = 15 * SECOND)
+        val expected = Playhead.Paused(bar = 2, beat = 3, beatsPerBar = 4, bpm = 120, seconds = 3)
         assertIs<Playhead.Playing>(playheadAt(paused, 15 * SECOND - 1))
-        assertEquals(Playhead.Paused(bar = 2, beat = 3, beatsPerBar = 4, seconds = 3), playheadAt(paused, 15 * SECOND))
-        assertEquals(Playhead.Paused(bar = 2, beat = 3, beatsPerBar = 4, seconds = 3), playheadAt(paused, 99 * SECOND))
+        assertEquals(expected, playheadAt(paused, 15 * SECOND))
+        assertEquals(expected, playheadAt(paused, 99 * SECOND))
 
         assertEquals(Playhead.Stopped, playheadAt(TransportState.Stopped, 12 * SECOND))
+    }
+
+    @Test
+    fun `playhead shows the section's tempo and meter`() {
+        val running = TransportState.Running(Timeline(0, 0, 0, ironMan))
+
+        val shortBar = assertIs<Playhead.Playing>(playheadAt(running, ironMan.timeOf(29)))
+        assertEquals(Playhead.Playing(bar = 8, beat = 2, beatsPerBar = 2, bpm = 65, seconds = 26), shortBar)
+
+        val fast = assertIs<Playhead.Playing>(playheadAt(running, ironMan.timeOf(238)))
+        assertEquals(61L, fast.bar)
+        assertEquals(168, fast.bpm)
+    }
+
+    @Test
+    fun `the song clock runs in real time across tempo changes`() {
+        val running = TransportState.Running(Timeline(0, 0, 0, ironMan))
+        val verse = assertIs<Playhead.Playing>(playheadAt(running, ironMan.timeOf(238)))
+
+        assertEquals(ironMan.timeOf(238) / SECOND, verse.seconds)
     }
 
     @Test

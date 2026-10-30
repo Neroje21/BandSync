@@ -2,6 +2,9 @@
 
 package com.bandsync.core.metronome
 
+import com.bandsync.core.protocol.SongChange
+import com.bandsync.core.protocol.SongConfig
+import com.bandsync.core.protocol.TimeSignature
 import com.bandsync.core.time.MonotonicClock
 import com.bandsync.core.time.SystemMonotonicClock
 import com.bandsync.core.time.TimeBase
@@ -38,8 +41,7 @@ class MetronomeEngineTest {
         startMasterNs = startMasterNs,
         firstBeat = firstBeat,
         playFromBeat = firstBeat,
-        bpm = 120,
-        beatsPerBar = 4,
+        map = SongMap.steady(bpm = 120, beatsPerBar = 4),
     )
 
     private fun TestScope.engineWithLog(clock: MonotonicClock): Pair<MetronomeEngine, MutableList<BeatTick>> {
@@ -62,6 +64,23 @@ class MetronomeEngineTest {
 
         assertEquals(listOf(0L, 1, 2, 3, 4), log.map { it.beat })
         assertEquals(log.map { line.masterTimeOf(it.beat) }, log.map { it.localNs })
+    }
+
+    @Test
+    fun `follows tempo and time signature changes`() = runTest {
+        val clock = SpinningClock(testScheduler)
+        val (engine, log) = engineWithLog(clock)
+        val map = SongConfig(
+            bpm = 120,
+            timeSignature = TimeSignature(2, 4),
+            changes = listOf(SongChange(2, 60, TimeSignature(3, 4))),
+        ).toMap()
+
+        engine.apply(TransportState.Running(Timeline(1_000 * MS, 0, 0, map)))
+        advanceTimeBy(5_200)
+
+        assertEquals(listOf(1_000L, 1_500, 2_000, 3_000, 4_000, 5_000).map { it * MS }, log.map { it.localNs })
+        assertEquals(listOf(1, 2, 1, 2, 3, 1), log.map { it.beatInBar })
     }
 
     @Test
@@ -131,7 +150,7 @@ class MetronomeEngineTest {
             val clock = SystemMonotonicClock
             val engine = MetronomeEngine(clock, TimeBase.Master, scope)
             val lateNs = mutableListOf<Long>()
-            val line = Timeline(clock.nowNs() + 50 * MS, 0, 0, bpm = 300, beatsPerBar = 4)
+            val line = Timeline(clock.nowNs() + 50 * MS, 0, 0, SongMap.steady(bpm = 300, beatsPerBar = 4))
 
             engine.apply(TransportState.Running(line))
             withTimeout(10_000) {

@@ -30,14 +30,27 @@ The tests in `:core` cover the timing, protocol and session logic. They need onl
 1. Everyone enters a name and picks a part.
 2. One phone taps **Host Session**. The others tap **Join Session** and choose it from the list.
 3. On the master's **Band** tab, compare the 4-digit code with the phone asking to join, then accept.
-4. On **Song**, set the title, tempo, time signature and count-in. Add PDFs, then assign them to parts. A part
-   can have several PDFs, and page ranges such as `1-3, 5` limit what that part sees.
+4. On **Song**, set the title, tempo, time signature and count-in. If the song changes tempo or time signature,
+   add a change for each bar where that happens. Add PDFs, then assign them to parts. A part can have several
+   PDFs, and page ranges such as `1-3, 5` limit what that part sees.
 5. On **Live**, press **Start**. Everyone gets a countdown, the count-in, then a shared beat and bar number.
 
 **Pause** freezes every phone on the same instant. **Resume** restarts from the start of that bar, with a
-count-in. The master can't change the song while it is playing, but can while paused.
+count-in at that section's tempo. The master can't change the song while it is playing, but can while paused.
+The metronome keeps going after the last bar until someone presses **Stop**.
 
 The master's Band tab shows each phone's sync as `±N ms`, the most its clock can be off the master's.
+
+### Test tabs
+
+Debug builds can include a sample song, so testing doesn't need PDFs on the master phone. On the **Song** tab,
+**Load test tabs (Iron Man)** imports the guitar, bass and drum tabs, assigns each to its part, and loads the song
+with the tempo marks and time signatures printed on the tabs. That makes it a good test of tempo changes: eight
+tempos from 65 to 168 BPM, plus a single 2/4 bar at bar 8. Vocals and Keys get nothing, which is a handy way to
+see the follower's waiting screen.
+
+The PDFs live in `app/src/debug/assets/test-tabs/`. They are commercial tabs, so they're gitignored and never
+go into a release build. Without them the button doesn't appear.
 
 ## How the timing works
 
@@ -61,15 +74,20 @@ over a song. Corrections are limited to 0.5 ms each, so a new estimate can't mak
 before anything happens. A phone that hears it late, or joins mid-song, works out the current beat and lands
 on it.
 
-**Drift-free beats.** Beat `n` is always computed from `n`:
+**Drift-free beats.** Beat `n` is always computed from `n`, using the section of the song it falls in:
 
 ```
-masterTime(n) = startTime + (n - firstBeat) * 60e9 / bpm
+timeOf(n) = sectionStart + (n - sectionFirstBeat) * 60e9 / sectionBpm
 ```
 
-Nothing is added to the previous beat, so rounding can't build up. The ticker runs on its own high-priority
-thread, sleeps until just before the beat, and spins for the last few milliseconds. If a device's timers turn
-out to be coarse, the spin window widens by itself.
+Nothing is added to the previous beat, so rounding can't build up: at most one nanosecond per section, however
+long the song runs. The ticker runs on its own high-priority thread, sleeps until just before the beat, and
+spins for the last few milliseconds. If a device's timers turn out to be coarse, the spin window widens by
+itself.
+
+**Tempo changes.** `START_AT` carries the whole song map: where each section starts, its tempo and its beats per
+bar. Each phone works out every beat from that, so a tempo change needs no message of its own and can't arrive
+late. The arithmetic is all integers, so every phone gets identical answers.
 
 **What "zero delay" means here.** The remaining differences are the clock error above and up to one display
 frame (about 16 ms at 60 Hz) between phones. The simulated figures below cover clock error only:
@@ -77,6 +95,7 @@ frame (about 16 ms at 60 Hz) between phones. The simulated figures below cover c
 | Simulated link | Worst flash error against the master, 5-minute song |
 | --- | --- |
 | Fast, Wi-Fi style (50 random runs) | 1.8 ms |
+| Fast, Wi-Fi style, across Iron Man's tempo changes | 1.2 ms |
 | Slow, Bluetooth style | 5.9 ms |
 | Fast link, synced only before the song | 17.9 ms |
 
@@ -107,7 +126,7 @@ pages out without turning them into images. Don't rely on page ranges to keep pa
 ```
 core/   Plain Kotlin with no Android imports, fully unit tested
   time/       clock sync
-  metronome/  timeline, playhead, drift-free ticker
+  metronome/  song map, timeline, playhead, drift-free ticker
   sheets/     roles, role-to-file map, page ranges, file store
   protocol/   wire messages
   session/    master and follower logic, behind a Transport interface

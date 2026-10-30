@@ -8,6 +8,7 @@ import com.bandsync.app.BandSyncApp
 import com.bandsync.app.net.JoinRequest
 import com.bandsync.app.net.NearbyTransport
 import com.bandsync.app.pdf.PdfImporter
+import com.bandsync.app.pdf.TestTabs
 import com.bandsync.core.metronome.MetronomeEngine
 import com.bandsync.core.metronome.TransportState
 import com.bandsync.core.protocol.SongConfig
@@ -46,6 +47,7 @@ class MasterViewModel(application: Application) : AndroidViewModel(application) 
     private val importErrors = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
     val store: SheetStore = app.store
+    val hasTestTabs: Boolean = TestTabs.isAvailable(application)
     val state = session.state
     val joinRequests = nearby.joinRequests
     val ticks = engine.ticks
@@ -83,6 +85,26 @@ class MasterViewModel(application: Application) : AndroidViewModel(application) 
                     importErrors.tryEmit("That PDF is password protected")
                 }
             }
+        }
+    }
+
+    /** Safe to tap twice: files are stored by content, and a part that already has its tab keeps it once. */
+    fun loadTestTabs() {
+        viewModelScope.launch {
+            val tabs = try {
+                withContext(Dispatchers.IO) {
+                    TestTabs.all.map { it.role to importer.importAsset(it.assetPath, it.displayName) }
+                }
+            } catch (_: IOException) {
+                importErrors.tryEmit("Couldn't load the test tabs")
+                return@launch
+            }
+            editSheets { sheets ->
+                tabs.fold(sheets) { map, (role, file) ->
+                    map.withFile(file).assignOnce(role, SheetSegment(file.id))
+                }
+            }
+            session.updateSong(TestTabs.song)
         }
     }
 
