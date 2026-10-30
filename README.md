@@ -223,3 +223,8 @@ app/    Android
 The master stops advertising while a song runs, because discovery traffic competes with the links for the
 radio. A phone that drops during a song keeps following the timeline by itself and can rejoin once the master
 pauses or stops.
+
+## License
+
+BandSync's code is under the [MIT License](LICENSE). That doesn't cover any tabs you use with it, which stay under
+their own copyright.
