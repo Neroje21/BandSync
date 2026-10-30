@@ -1,5 +1,7 @@
 package com.bandsync.core.sheets
 
+import com.bandsync.core.metronome.MAX_BPM
+import com.bandsync.core.metronome.MIN_BPM
 import java.io.ByteArrayOutputStream
 import java.util.zip.Inflater
 import kotlin.math.abs
@@ -16,6 +18,21 @@ private const val DEFAULT_ROW_HEIGHT_PT = 100.0
 
 /** Fewer than this per page is more likely to be page numbers than bars. */
 private const val MIN_NUMBERS_PER_PAGE = 2
+
+/** Text within this many points vertically is on one line. */
+private const val LINE_TOLERANCE_PT = 1.0
+
+/** How far apart two glyphs of one word can start, as a multiple of the font size. */
+private const val GLYPH_SPACING = 1.2
+
+/** Time signature digits are far larger than bar numbers, which is how they're told from other numbers. */
+private const val METER_SIZE_RATIO = 2.0
+
+/** A tempo mark ends in "= 76", after a drawn note and sometimes a section name. */
+private val TEMPO_MARK = Regex("""=\s*(\d{2,3})$""")
+
+private val NOTE_VALUES = setOf(1, 2, 4, 8, 16, 32)
+private val BEATS_IN_BAR = 1..32
 
 private const val NUMBER = """-?[\d.]+\s+"""
 
@@ -54,7 +71,7 @@ private class Font(val name: String, val unicode: Map<Int, Char>)
 
 private class TextRun(val page: Int, val x: Double, val y: Double, val size: Double, val font: String, val text: String)
 
-private class PrintedNumber(val value: Int, val page: Int, val x: Double, val y: Double)
+private class PrintedNumber(val value: Int, val page: Int, val x: Double, val y: Double, val size: Double)
 
 private class Page(val width: Double, val height: Double, val text: List<TextRun>)
 
@@ -72,7 +89,11 @@ object BarLayoutParser {
         val objects = readObjects(pdf.toString(Charsets.ISO_8859_1))
         val pages = readPages(objects)
         val numbers = findBarNumbers(pages) ?: return null
-        BarLayout(buildCells(numbers, pages))
+        BarLayout(
+            cells = buildCells(numbers, pages),
+            tempos = findTempoMarks(pages, numbers),
+            meters = findTimeSignatures(pages, numbers),
+        )
     }.getOrNull()
 
     private fun readObjects(pdf: String): Map<Int, String> {
@@ -225,10 +246,70 @@ object BarLayoutParser {
                 }
                 numbers.mapNotNull { parts ->
                     val first = parts.first()
-                    parts.joinToString("") { it.text }.toIntOrNull()?.let { PrintedNumber(it, first.page, first.x, first.y) }
+                    parts.joinToString("") { it.text }.toIntOrNull()
+                        ?.let { PrintedNumber(it, first.page, first.x, first.y, first.size) }
                 }
             }
         }
+
+    /** Tempo marks sit just above the bar numbers of their line. */
+    private fun findTempoMarks(pages: List<Page>, numbers: List<PrintedNumber>): List<TempoMark> =
+        pages.flatMap { page ->
+            rows(page.text, LINE_TOLERANCE_PT) { it.y }.flatMap { row ->
+                joinAdjacent(row).mapNotNull { run ->
+                    val bpm = TEMPO_MARK.find(run.text)?.groupValues?.get(1)?.toInt()
+                    if (bpm == null || bpm !in MIN_BPM..MAX_BPM) return@mapNotNull null
+                    val onLineBelow = { number: PrintedNumber -> number.y <= run.y }
+                    barBeside(run, numbers, onLineBelow)?.let { TempoMark(it, bpm) }
+                }
+            }
+        }.distinctBy { it.bar }
+
+    /** Time signatures are two stacked numbers, just below the bar numbers of their line. */
+    private fun findTimeSignatures(pages: List<Page>, numbers: List<PrintedNumber>): List<MeterMark> {
+        val numberSize = numbers.first().size
+        return pages.flatMap { page ->
+            val large = page.text.filter { it.size >= numberSize * METER_SIZE_RATIO && it.text.all(Char::isDigit) }
+            rows(large, LINE_TOLERANCE_PT) { it.y }.zipWithNext().flatMap { (upper, lower) ->
+                joinAdjacent(upper).mapNotNull { top ->
+                    val bottom = joinAdjacent(lower).firstOrNull { abs(it.x - top.x) <= top.size }
+                    val beats = top.text.toIntOrNull()
+                    val unit = bottom?.text?.toIntOrNull()
+                    val stacked = bottom != null && top.y - bottom.y <= top.size * GLYPH_SPACING
+                    if (!stacked || beats !in BEATS_IN_BAR || unit !in NOTE_VALUES) return@mapNotNull null
+                    val onLineAbove = { number: PrintedNumber -> number.y >= top.y }
+                    barBeside(top, numbers, onLineAbove)?.let { MeterMark(it, beats!!, unit!!) }
+                }
+            }
+        }.distinctBy { it.bar }
+    }
+
+    /** The bar a mark belongs to: the last one that starts at or before it, on the nearest line in [onLine]. */
+    private fun barBeside(mark: TextRun, numbers: List<PrintedNumber>, onLine: (PrintedNumber) -> Boolean): Int? {
+        val onPage = numbers.filter { it.page == mark.page }
+        val lineY = onPage.filter(onLine).minByOrNull { abs(it.y - mark.y) }?.y ?: return null
+        val line = onPage.filter { abs(it.y - lineY) <= LINE_TOLERANCE_PT }.sortedBy { it.x }
+        return (line.lastOrNull { it.x <= mark.x } ?: line.first()).value
+    }
+
+    /** Puts back together the words of a line, which tabs often draw one glyph at a time. */
+    private fun joinAdjacent(line: List<TextRun>): List<TextRun> {
+        val words = mutableListOf<TextRun>()
+        var previous: TextRun? = null
+        line.sortedBy { it.x }.forEach { run ->
+            val word = words.lastOrNull()
+            val glyph = previous
+            val continues = glyph != null && word != null && run.font == word.font &&
+                abs(run.size - word.size) < 0.1 && run.x - glyph.x <= run.size * GLYPH_SPACING
+            if (continues) {
+                words[words.lastIndex] = TextRun(word.page, word.x, word.y, word.size, word.font, word.text + run.text)
+            } else {
+                words += run
+            }
+            previous = run
+        }
+        return words
+    }
 
     private fun <T> rows(items: List<T>, tolerance: Double, y: (T) -> Double): List<List<T>> {
         val rows = mutableListOf<MutableList<T>>()

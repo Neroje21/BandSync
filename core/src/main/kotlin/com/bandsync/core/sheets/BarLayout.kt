@@ -30,8 +30,16 @@ data class BarCell(
 /** A place on a page. All coordinates are fractions of the page, measured from its top left. */
 data class TabPosition(val pageIndex: Int, val x: Float, val top: Float, val bottom: Float)
 
-/** Where each bar of a tab is printed, in bar order. */
-data class BarLayout(val cells: List<BarCell>) {
+data class TempoMark(val bar: Int, val bpm: Int)
+
+data class MeterMark(val bar: Int, val beatsPerBar: Int, val beatUnit: Int)
+
+/** Where each bar of a tab is printed, in bar order, and the tempo and time signature marks printed with them. */
+data class BarLayout(
+    val cells: List<BarCell>,
+    val tempos: List<TempoMark> = emptyList(),
+    val meters: List<MeterMark> = emptyList(),
+) {
     /**
      * Beats are spaced evenly from a bar's first note, which is how tabs print them when the rhythm is even.
      * The last beat then covers whatever is left up to the next bar's first note, so the arrow never jumps

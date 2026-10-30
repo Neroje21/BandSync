@@ -47,6 +47,11 @@ data class MasterState(
 
 private data class OutgoingFile(val endpoint: EndpointId, val fileId: FileId)
 
+/** What the band is playing now. Any part's timeline can be built from it, including a late joiner's. */
+private class Performance(val song: SongConfig, val originMasterNs: Long, val playFromNs: Long) {
+    fun timelineFor(part: Role): Timeline = song.timelineFor(part, originMasterNs, playFromNs)
+}
+
 class MasterSession(
     private val transport: Transport,
     private val clock: MonotonicClock,
@@ -56,6 +61,7 @@ class MasterSession(
     val state: StateFlow<MasterState> = _state.asStateFlow()
 
     private val outgoing = HashMap<Long, OutgoingFile>()
+    private var performance: Performance? = null
 
     fun updateSong(song: SongConfig) {
         _state.update { it.copy(song = song) }
@@ -67,34 +73,46 @@ class MasterSession(
         _state.value.members.keys.forEach(::sendManifest)
     }
 
-    /** Starts from the top, or from the beginning of the paused bar so the band re-enters on a downbeat. */
+    /**
+     * Starts from the top, or from the beginning of the paused bar so the band re-enters on a downbeat. The start
+     * is timed so that the slowest part's count-in still begins at least [START_LEAD_NS] from now.
+     */
     fun start() {
         val current = _state.value
         val song = current.song
-        val map = song.toMap()
-        // Resuming goes by bar number, which still means the same place if the song was edited while paused.
-        val playFromBeat = when (val paused = current.transport) {
-            is TransportState.Paused -> map.firstBeatOfBar(paused.timeline.barOf(paused.beat))
-            else -> 0L
-        }
-        val timeline = Timeline(
-            startMasterNs = clock.nowNs() + START_LEAD_NS,
-            firstBeat = playFromBeat - song.countInBars * map.sectionAt(playFromBeat).beatsPerBar,
-            playFromBeat = playFromBeat,
-            map = map,
-        )
-        _state.update { it.copy(transport = TransportState.Running(timeline)) }
-        broadcast(WireMessage.StartAt(timeline))
+        val playFromNs = resumePointNs(current.transport, song)
+        val originMasterNs = clock.nowNs() + START_LEAD_NS + song.longestCountInNs(playFromNs) - playFromNs
+        val next = Performance(song, originMasterNs, playFromNs)
+        performance = next
+        _state.update { it.copy(transport = TransportState.Running(next.timelineFor(it.ownRole))) }
+        current.members.values.forEach { send(it.endpoint, WireMessage.StartAt(next.timelineFor(it.role))) }
+    }
+
+    /**
+     * A bar of the shared map, which still means the same place if the song was edited while paused. All parts
+     * resume from that one moment, so parts on tempos of their own keep their place relative to each other.
+     */
+    private fun resumePointNs(transport: TransportState, song: SongConfig): Long {
+        val paused = transport as? TransportState.Paused ?: return 0
+        val playing = performance ?: return 0
+        val before = playing.song.toMap()
+        val pausedNs = maxOf(paused.atMasterNs - playing.originMasterNs, playing.playFromNs)
+        val after = song.toMap()
+        return after.timeOf(after.firstBeatOfBar(before.barOf(before.beatAt(pausedNs))))
     }
 
     fun pause() {
         val running = _state.value.transport as? TransportState.Running ?: return
+        val playing = performance ?: return
         val atMasterNs = clock.nowNs() + PAUSE_LEAD_NS
         _state.update { it.copy(transport = TransportState.Paused(running.timeline, atMasterNs)) }
-        broadcast(WireMessage.PauseAt(running.timeline, atMasterNs))
+        _state.value.members.values.forEach {
+            send(it.endpoint, WireMessage.PauseAt(playing.timelineFor(it.role), atMasterNs))
+        }
     }
 
     fun stop() {
+        performance = null
         _state.update { it.copy(transport = TransportState.Stopped) }
         broadcast(WireMessage.Stop)
     }
@@ -153,10 +171,11 @@ class MasterSession(
         sendManifest(from)
         // A late joiner gets the live timeline and works out the current beat from it by itself. Stopped is
         // sent too: a phone rejoining after a drop is still following the timeline it had.
+        val timeline = performance?.timelineFor(hello.role)
         when (val state = current.transport) {
             TransportState.Stopped -> send(from, WireMessage.Stop)
-            is TransportState.Running -> send(from, WireMessage.StartAt(state.timeline))
-            is TransportState.Paused -> send(from, WireMessage.PauseAt(state.timeline, state.atMasterNs))
+            is TransportState.Running -> send(from, WireMessage.StartAt(timeline ?: state.timeline))
+            is TransportState.Paused -> send(from, WireMessage.PauseAt(timeline ?: state.timeline, state.atMasterNs))
         }
     }
 

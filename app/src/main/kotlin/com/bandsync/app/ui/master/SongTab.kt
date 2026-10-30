@@ -77,6 +77,13 @@ fun SongTab(state: MasterState, viewModel: MasterViewModel) {
         // Changing tempo under a running timeline would leave phones with no shared plan.
         val songEditable = state.transport !is TransportState.Running
         SongSettings(state.song, songEditable, viewModel::updateSong)
+        OutlinedButton(
+            onClick = viewModel::readTempoFromTabs,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = songEditable && state.sheets.assignments.values.any { it.isNotEmpty() },
+        ) {
+            Text("Read tempo from tabs")
+        }
         PdfLibrary(state.sheets, songEditable, viewModel)
         Role.entries.forEach { role ->
             RoleCard(role, state, viewModel)
@@ -165,7 +172,8 @@ private fun NumberField(
 private fun SongChanges(song: SongConfig, enabled: Boolean, onChange: (SongConfig) -> Unit) {
     Text("Tempo and time changes", style = MaterialTheme.typography.titleSmall)
     Text(
-        "The BPM above is how the song opens. Use the bar numbers printed on your tab.",
+        "The BPM above is how the song opens. A change can be for everyone or just some parts. " +
+            "Each part's bars are numbered as on its own tab.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -201,30 +209,61 @@ private fun SongChangeRow(
     onChange: (SongChange) -> Unit,
     onRemove: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        NumberField(
-            value = change.bar,
-            range = 2..MAX_BAR,
-            label = "Bar",
-            enabled = enabled,
-            onChange = { onChange(change.copy(bar = it)) },
-            modifier = Modifier.weight(1f),
-        )
-        NumberField(
-            value = change.bpm,
-            range = MIN_BPM..MAX_BPM,
-            label = "BPM",
-            enabled = enabled,
-            onChange = { onChange(change.copy(bpm = it)) },
-            modifier = Modifier.weight(1f),
-        )
-        TimeSignatureMenu(change.timeSignature, enabled, onSelect = { onChange(change.copy(timeSignature = it)) })
-        TextButton(
-            onClick = onRemove,
-            enabled = enabled,
-            modifier = Modifier.semantics { contentDescription = "Remove this change" },
-        ) {
-            Text("✕")
+    Column {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            NumberField(
+                value = change.bar,
+                range = (if (change.parts.isEmpty()) 2 else 1)..MAX_BAR, // A part can open at its own tempo.
+                label = "Bar",
+                enabled = enabled,
+                onChange = { onChange(change.copy(bar = it)) },
+                modifier = Modifier.weight(1f),
+            )
+            NumberField(
+                value = change.bpm,
+                range = MIN_BPM..MAX_BPM,
+                label = "BPM",
+                enabled = enabled,
+                onChange = { onChange(change.copy(bpm = it)) },
+                modifier = Modifier.weight(1f),
+            )
+            TimeSignatureMenu(change.timeSignature, enabled, onSelect = { onChange(change.copy(timeSignature = it)) })
+            TextButton(
+                onClick = onRemove,
+                enabled = enabled,
+                modifier = Modifier.semantics { contentDescription = "Remove this change" },
+            ) {
+                Text("✕")
+            }
+        }
+        PartsMenu(change.parts, enabled, onChange = { onChange(change.copy(parts = it)) })
+    }
+}
+
+/** Stays open after a tap on a part, since picking several is the point of it. */
+@Composable
+private fun PartsMenu(parts: Set<Role>, enabled: Boolean, onChange: (Set<Role>) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val selected = Role.entries.filter { it in parts }
+    Box {
+        TextButton(onClick = { open = true }, enabled = enabled) {
+            Text("For: ${selected.joinToString(", ") { it.label }.ifEmpty { "Everyone" }}")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Everyone") },
+                onClick = {
+                    open = false
+                    onChange(emptySet())
+                },
+            )
+            Role.entries.forEach { part ->
+                DropdownMenuItem(
+                    text = { Text(part.label) },
+                    leadingIcon = { Text(if (part in parts) "✓" else "") },
+                    onClick = { onChange(if (part in parts) parts - part else parts + part) },
+                )
+            }
         }
     }
 }

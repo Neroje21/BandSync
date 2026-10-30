@@ -68,6 +68,12 @@ data class SongMap(val sections: List<SongSection>) {
         return section.fromBeat + Math.floorDiv((ns - startsNs[index]) * section.bpm, NS_PER_MINUTE)
     }
 
+    /** The earliest beat at or after [ns]. */
+    fun nextBeatFrom(ns: Long): Long {
+        val beat = beatAt(ns)
+        return if (timeOf(beat) == ns) beat else beat + 1
+    }
+
     fun secondsAt(beat: Long): Long = timeOf(beat) / NS_PER_SECOND
 
     private fun sectionIndexAt(beat: Long): Int = sections.indexOfLast { it.fromBeat <= beat }.coerceAtLeast(0)

@@ -302,6 +302,132 @@ class SessionFlowTest {
     }
 
     @Test
+    fun `every part follows the same tempo changes`() = runTest {
+        session.updateSong(SongConfig(bpm = 65, changes = listOf(SongChange(3, 168, TimeSignature(4, 4)))))
+        val phones = Role.entries.map { role ->
+            client(role.name, role).first.also { network.connect(role.name, it) }
+        }
+        settle()
+
+        session.start()
+        settle()
+
+        val expected = assertIs<TransportState.Running>(session.state.value.transport).timeline
+        phones.forEach { phone ->
+            val timeline = assertIs<TransportState.Running>(phone.state.value.transport).timeline
+            assertEquals(expected, timeline)
+            assertEquals(168, timeline.bpmAt(timeline.map.firstBeatOfBar(3)))
+        }
+    }
+
+    /** Drums go to double time at bar 3 while the bass holds. */
+    private val splitSong = SongConfig(
+        bpm = 120,
+        changes = listOf(SongChange(3, 240, TimeSignature(4, 4), parts = setOf(Role.DRUMS))),
+    )
+
+    private fun running(client: ClientSession) =
+        assertIs<TransportState.Running>(client.state.value.transport).timeline
+
+    @Test
+    fun `each phone receives the timeline for its own part`() = runTest {
+        session.updateSong(splitSong)
+        val (drummer, _) = client("drummer", Role.DRUMS)
+        val (bassist, _) = client("bassist", Role.BASS)
+        network.connect("drummer", drummer)
+        network.connect("bassist", bassist)
+        settle()
+
+        session.start()
+        settle()
+
+        assertEquals(240, running(drummer).bpmAt(8))
+        assertEquals(120, running(bassist).bpmAt(8))
+        assertEquals(running(bassist).masterTimeOf(0), running(drummer).masterTimeOf(0))
+    }
+
+    @Test
+    fun `the master's own part gets its own timeline`() = runTest {
+        session.updateSong(splitSong.copy(changes = listOf(splitSong.changes.single().copy(parts = setOf(Role.GUITAR)))))
+
+        session.start()
+
+        assertEquals(240, assertIs<TransportState.Running>(session.state.value.transport).timeline.bpmAt(8))
+    }
+
+    @Test
+    fun `the slowest count-in sets when the band starts`() = runTest {
+        session.updateSong(
+            SongConfig(bpm = 120, changes = listOf(SongChange(1, 60, TimeSignature(4, 4), parts = setOf(Role.BASS)))),
+        )
+        val (bassist, _) = client("bassist", Role.BASS)
+        val (guitarist, _) = client("guitarist", Role.GUITAR)
+        network.connect("bassist", bassist)
+        network.connect("guitarist", guitarist)
+        settle()
+
+        session.start()
+        settle()
+
+        assertEquals(masterClock.ns + 2_000 * MS, running(bassist).startMasterNs)
+        assertEquals(masterClock.ns + 4_000 * MS, running(guitarist).startMasterNs)
+        assertEquals(running(bassist).masterTimeOf(0), running(guitarist).masterTimeOf(0))
+    }
+
+    @Test
+    fun `a late joiner gets its own part's timeline`() = runTest {
+        session.updateSong(splitSong)
+        session.start()
+        masterClock.ns += 30_000 * MS
+
+        val (drummer, _) = client("drummer", Role.DRUMS)
+        network.connect("drummer", drummer)
+        settle()
+
+        assertEquals(240, running(drummer).bpmAt(8))
+    }
+
+    @Test
+    fun `parts keep their place relative to each other across a pause`() = runTest {
+        session.updateSong(splitSong)
+        val (drummer, _) = client("drummer", Role.DRUMS)
+        val (bassist, _) = client("bassist", Role.BASS)
+        network.connect("drummer", drummer)
+        network.connect("bassist", bassist)
+        settle()
+        session.start() // Bar 1 is 4 s from now. At 12 s the bass reaches its bar 5 and the drums their bar 7.
+        masterClock.ns += 12_500 * MS
+        session.pause()
+        settle()
+
+        val pausedDrums = assertIs<TransportState.Paused>(drummer.state.value.transport)
+        val pausedBass = assertIs<TransportState.Paused>(bassist.state.value.transport)
+        assertEquals(pausedBass.atMasterNs, pausedDrums.atMasterNs)
+
+        masterClock.ns += 1_000 * MS
+        session.start()
+        settle()
+
+        val drums = running(drummer)
+        val bass = running(bassist)
+        assertEquals(16L, bass.playFromBeat, "bar 5 of the shared map")
+        assertEquals(24L, drums.playFromBeat, "the place the drums reach at that moment, bar 7 of theirs")
+        assertEquals(bass.masterTimeOf(16), drums.masterTimeOf(24))
+    }
+
+    @Test
+    fun `pausing during a count-in resumes from the same place`() = runTest {
+        session.updateSong(splitSong)
+        session.start()
+        session.pause()
+        masterClock.ns += 1_000 * MS
+
+        session.start()
+
+        assertEquals(0L, assertIs<TransportState.Running>(session.state.value.transport).timeline.playFromBeat)
+    }
+
+    @Test
     fun `resuming in a later section counts in at that section's tempo and meter`() = runTest {
         session.updateSong(
             SongConfig(bpm = 120, changes = listOf(SongChange(3, 180, TimeSignature(3, 4)))),

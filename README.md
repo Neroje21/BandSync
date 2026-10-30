@@ -30,16 +30,30 @@ The tests in `:core` cover the timing, protocol and session logic. They need onl
 1. Everyone enters a name and picks a part.
 2. One phone taps **Host Session**. The others tap **Join Session** and choose it from the list.
 3. On the master's **Band** tab, compare the 4-digit code with the phone asking to join, then accept.
-4. On **Song**, set the title, tempo, time signature and count-in. If the song changes tempo or time signature,
-   add a change for each bar where that happens. Add PDFs, then assign them to parts. A part can have several
-   PDFs, and page ranges such as `1-3, 5` limit what that part sees.
-5. On **Live**, press **Start**. Everyone gets a countdown, the count-in, then a shared beat and bar number.
+4. On **Song**, set the title, tempo, time signature and count-in. Add PDFs, then assign them to parts. A part
+   can have several PDFs, and page ranges such as `1-3, 5` limit what that part sees.
+5. If the song changes tempo or time signature, tap **Read tempo from tabs**, or add each change by hand.
+6. On **Live**, press **Start**. Everyone gets a countdown, the count-in, then a beat and bar number.
 
 **Pause** freezes every phone on the same instant. **Resume** restarts from the start of that bar, with a
 count-in at that section's tempo. The master can't change the song while it is playing, but can while paused.
 The metronome keeps going after the last bar until someone presses **Stop**.
 
 The master's Band tab shows each phone's sync as `±N ms`, the most its clock can be off the master's.
+
+### Parts on different tempos
+
+A tempo or time signature change can be for the whole band or only some parts, so the drums can go to double time
+while the bass holds. Each phone then shows its own part's beat, BPM, bar number and arrow.
+
+**Read tempo from tabs** sets this up from the marks printed on each part's PDF. A change printed on every tab
+goes to everyone, and one printed on only some tabs goes to those parts. A part with no tab follows the changes
+shared by everyone. It replaces any changes already entered, and needs a tab that prints tempo marks and bar
+numbers, as Songsterr's PDFs do. To change one by hand, use the **For** menu under it.
+
+All parts stay on one song clock. They can move apart and meet again exactly, and after a count-in everyone comes
+in on the same instant, even when each part counts in at its own tempo. **Resume** goes by the shared bar: a part
+on its own tempo comes back in at its place at that moment, which may not be the start of one of its own bars.
 
 ### The arrow
 
@@ -60,9 +74,9 @@ arrow reads straight through the printed bars.
 
 Debug builds can include a sample song, so testing doesn't need PDFs on the master phone. On the **Song** tab,
 **Load test tabs (Iron Man)** imports the guitar, bass and drum tabs, assigns each to its part, and loads the song
-with the tempo marks and time signatures printed on the tabs. That makes it a good test of tempo changes: eight
-tempos from 65 to 168 BPM, plus a single 2/4 bar at bar 8. Vocals and Keys get nothing, which is a handy way to
-see the follower's waiting screen.
+with the tempo marks and time signatures read from the tabs. That makes it a good test of tempo changes: eight
+tempos from 65 to 168 BPM, plus a single 2/4 bar at bar 8. All three tabs agree, so every change is for the whole
+band. Vocals and Keys get nothing, which is a handy way to see the follower's waiting screen.
 
 The PDFs live in `app/src/debug/assets/test-tabs/`. They are commercial tabs, so they're gitignored and never
 go into a release build. Without them the button doesn't appear.
@@ -103,6 +117,11 @@ itself.
 **Tempo changes.** `START_AT` carries the whole song map: where each section starts, its tempo and its beats per
 bar. Each phone works out every beat from that, so a tempo change needs no message of its own and can't arrive
 late. The arithmetic is all integers, so every phone gets identical answers.
+
+**Parts on different tempos.** The master sends each phone the map for its own part. All of them hang off one
+shared time, the moment of bar 1: a part at song time `t` plays at `barOneTime + t`, whatever its tempo. So parts
+stay locked together however far apart their bar numbers get. The start is timed so the slowest part's count-in
+still begins at least 2 seconds ahead.
 
 **What "zero delay" means here.** The remaining differences are the clock error above and up to one display
 frame (about 16 ms at 60 Hz) between phones. The simulated figures below cover clock error only:
