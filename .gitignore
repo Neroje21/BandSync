@@ -1,5 +1,10 @@
-node_modules/
-.expo/
-dist/
-*.log
-.DS_Store
+.gradle/
+.kotlin/
+.idea/
+build/
+local.properties
+*.iml
+*.apk
+*.aab
+*.keystore
+captures/
