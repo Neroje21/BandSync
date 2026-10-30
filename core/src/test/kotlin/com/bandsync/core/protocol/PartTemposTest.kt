@@ -110,38 +110,86 @@ class PrintedTemposTest {
     @Test
     fun `a mark on every tab is for the whole band`() {
         val song = SongConfig().withPrintedTempos(
-            mapOf(Role.DRUMS to tab(1 to 80, 9 to 140), Role.BASS to tab(1 to 80, 9 to 140)),
+            mapOf(
+                Role.DRUMS to listOf(tab(1 to 80, 9 to 140)),
+                Role.BASS to listOf(tab(1 to 80, 9 to 140)),
+            ),
         )
 
         assertEquals(80, song.bpm)
-        assertEquals(listOf(SongChange(9, 140, FOUR_FOUR)), song.changes)
+        assertEquals(
+            listOf(
+                SongChange(1, 80, FOUR_FOUR, parts = setOf(Role.DRUMS)),
+                SongChange(9, 140, FOUR_FOUR, parts = setOf(Role.DRUMS)),
+                SongChange(1, 80, FOUR_FOUR, parts = setOf(Role.BASS)),
+                SongChange(9, 140, FOUR_FOUR, parts = setOf(Role.BASS)),
+            ),
+            song.changes.filter { Role.DRUMS in it.parts || Role.BASS in it.parts },
+        )
     }
 
     @Test
-    fun `a mark on one tab is for that part alone`() {
+    fun `changing one part's copy leaves the other parts alone`() {
         val song = SongConfig().withPrintedTempos(
-            mapOf(Role.DRUMS to tab(1 to 80, 9 to 160), Role.BASS to tab(1 to 80)),
+            mapOf(
+                Role.DRUMS to listOf(tab(1 to 80, 9 to 140)),
+                Role.BASS to listOf(tab(1 to 80, 9 to 140)),
+            ),
         )
 
-        assertEquals(listOf(SongChange(9, 160, FOUR_FOUR, parts = setOf(Role.DRUMS))), song.changes)
+        val edited = song.copy(
+            changes = song.changes.map { if (it.bar == 9 && Role.DRUMS in it.parts) it.copy(bpm = 200) else it },
+        )
+
+        assertEquals(200, edited.toMap(Role.DRUMS).sections.last().bpm)
+        assertEquals(140, edited.toMap(Role.BASS).sections.last().bpm)
+    }
+
+    @Test
+    fun `a part keeps a change that only its own tab prints`() {
+        val song = SongConfig().withPrintedTempos(
+            mapOf(Role.DRUMS to listOf(tab(1 to 80, 9 to 160)), Role.BASS to listOf(tab(1 to 80))),
+        )
+
         assertEquals(160, song.toMap(Role.DRUMS).sections.last().bpm)
         assertEquals(80, song.toMap(Role.BASS).sections.last().bpm)
-        assertEquals(80, song.toMap(Role.VOCALS).sections.last().bpm, "a part with no tab follows the shared map")
     }
 
     @Test
-    fun `a mark on some tabs is for those parts`() {
-        val drums = tab(1 to 80, 9 to 160)
+    fun `a part with no marks follows what the marked parts agree on`() {
         val song = SongConfig().withPrintedTempos(
-            mapOf(Role.DRUMS to drums, Role.GUITAR to drums, Role.BASS to tab(1 to 80)),
+            mapOf(
+                Role.DRUMS to listOf(tab(1 to 80, 9 to 140, 20 to 200)),
+                Role.BASS to listOf(tab(1 to 80, 9 to 140)),
+            ),
         )
 
-        assertEquals(setOf(Role.DRUMS, Role.GUITAR), song.changes.single().parts)
+        assertEquals(listOf(80, 140), song.toMap(Role.VOCALS).sections.map { it.bpm })
+    }
+
+    @Test
+    fun `every sheet of a part is read`() {
+        val song = SongConfig().withPrintedTempos(
+            mapOf(Role.DRUMS to listOf(tab(1 to 80), tab(9 to 160))),
+        )
+
+        assertEquals(listOf(80, 160), song.toMap(Role.DRUMS).sections.map { it.bpm })
+    }
+
+    @Test
+    fun `the first sheet wins where a part's sheets disagree`() {
+        val song = SongConfig().withPrintedTempos(
+            mapOf(Role.DRUMS to listOf(tab(9 to 160), tab(9 to 100))),
+        )
+
+        assertEquals(160, song.toMap(Role.DRUMS).sections.last().bpm)
     }
 
     @Test
     fun `parts that open differently keep their own opening`() {
-        val song = SongConfig(bpm = 100).withPrintedTempos(mapOf(Role.DRUMS to tab(1 to 160), Role.BASS to tab(1 to 80)))
+        val song = SongConfig(bpm = 100).withPrintedTempos(
+            mapOf(Role.DRUMS to listOf(tab(1 to 160)), Role.BASS to listOf(tab(1 to 80))),
+        )
 
         assertEquals(160, song.toMap(Role.DRUMS).sections.first().bpm)
         assertEquals(80, song.toMap(Role.BASS).sections.first().bpm)
@@ -150,26 +198,30 @@ class PrintedTemposTest {
     @Test
     fun `tempo and meter marks on different bars combine`() {
         val marked = tab(1 to 80, 9 to 140, meters = listOf(MeterMark(1, 4, 4), MeterMark(5, 3, 4)))
-        val song = SongConfig().withPrintedTempos(mapOf(Role.DRUMS to marked))
+        val song = SongConfig().withPrintedTempos(mapOf(Role.DRUMS to listOf(marked)))
 
         assertEquals(
-            listOf(SongChange(5, 80, TimeSignature(3, 4)), SongChange(9, 140, TimeSignature(3, 4))),
-            song.changes,
+            listOf(
+                SongChange(1, 80, FOUR_FOUR),
+                SongChange(5, 80, TimeSignature(3, 4)),
+                SongChange(9, 140, TimeSignature(3, 4)),
+            ),
+            song.changes.filter { Role.DRUMS in it.parts }.map { it.copy(parts = emptySet()) },
         )
     }
 
     @Test
     fun `tabs with no marks leave the song alone`() {
         val song = SongConfig(bpm = 99, changes = listOf(SongChange(5, 120, FOUR_FOUR)))
-        assertEquals(song, song.withPrintedTempos(mapOf(Role.DRUMS to tab())))
+        assertEquals(song, song.withPrintedTempos(mapOf(Role.DRUMS to listOf(tab()))))
     }
 
     @Test
     fun `reading again replaces what was there`() {
         val song = SongConfig(changes = listOf(SongChange(30, 200, FOUR_FOUR)))
-        val read = song.withPrintedTempos(mapOf(Role.DRUMS to tab(1 to 80, 9 to 160)))
+        val read = song.withPrintedTempos(mapOf(Role.DRUMS to listOf(tab(1 to 80, 9 to 160))))
 
-        assertEquals(listOf(9), read.changes.map { it.bar })
+        assertTrue(read.changes.none { it.bar == 30 })
     }
 }
 
@@ -194,14 +246,16 @@ class RealTabTemposTest {
     }
 
     @Test
-    fun `the tabs set up the whole song for the whole band`() {
+    fun `the tabs preset the whole song for every instrument`() {
         val tabs = mapOf(Role.BASS to "bass", Role.DRUMS to "drums", Role.GUITAR to "guitar")
-            .mapValues { (_, name) -> layoutOf(name) ?: return }
+            .mapValues { (_, name) -> listOf(layoutOf(name) ?: return) }
 
         val song = SongConfig(title = "Iron Man").withPrintedTempos(tabs)
 
-        assertTrue(song.changes.all { it.parts.isEmpty() }, "the tabs agree, so nothing is part-specific")
-        assertEquals(ironMan, song.toMap())
-        assertEquals(ironMan, song.toMap(Role.DRUMS))
+        for (part in tabs.keys) {
+            assertEquals(9, song.changes.count { part in it.parts }, "$part has a list of its own")
+            assertEquals(ironMan, song.toMap(part), "$part")
+        }
+        assertEquals(ironMan, song.toMap(Role.VOCALS), "a part with no tab follows what the tabs agree on")
     }
 }

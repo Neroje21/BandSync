@@ -80,7 +80,7 @@ class MasterSession(
     fun start() {
         val current = _state.value
         val song = current.song
-        val playFromNs = resumePointNs(current.transport, song)
+        val playFromNs = resumePointNs(current)
         val originMasterNs = clock.nowNs() + START_LEAD_NS + song.longestCountInNs(playFromNs) - playFromNs
         val next = Performance(song, originMasterNs, playFromNs)
         performance = next
@@ -89,15 +89,16 @@ class MasterSession(
     }
 
     /**
-     * A bar of the shared map, which still means the same place if the song was edited while paused. All parts
-     * resume from that one moment, so parts on tempos of their own keep their place relative to each other.
+     * The bar the master's own part paused in, found by number, which still means the same place if the song was
+     * edited while paused. All parts resume from that one moment, so parts on tempos of their own keep their
+     * place relative to each other, and parts on the master's tempo come back in on a bar line with it.
      */
-    private fun resumePointNs(transport: TransportState, song: SongConfig): Long {
-        val paused = transport as? TransportState.Paused ?: return 0
+    private fun resumePointNs(current: MasterState): Long {
+        val paused = current.transport as? TransportState.Paused ?: return 0
         val playing = performance ?: return 0
-        val before = playing.song.toMap()
+        val before = playing.song.toMap(current.ownRole)
         val pausedNs = maxOf(paused.atMasterNs - playing.originMasterNs, playing.playFromNs)
-        val after = song.toMap()
+        val after = current.song.toMap(current.ownRole)
         return after.timeOf(after.firstBeatOfBar(before.barOf(before.beatAt(pausedNs))))
     }
 

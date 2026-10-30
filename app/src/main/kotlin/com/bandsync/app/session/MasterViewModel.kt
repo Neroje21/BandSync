@@ -109,34 +109,44 @@ class MasterViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
             val sheets = session.state.value.sheets
-            val printed = withContext(Dispatchers.IO) { tabsByPart(sheets) }
+            val printed = withContext(Dispatchers.IO) { markedSheetsByPart(sheets) }
             session.updateSong(TestTabs.song.withPrintedTempos(printed))
         }
     }
 
-    /** Sets the song's tempo changes from what is printed on each part's tab, replacing any already there. */
+    /** Presets each instrument's tempo changes from all of its sheets, replacing any changes already there. */
     fun readTempoFromTabs() {
         viewModelScope.launch {
             val current = session.state.value
-            val printed = withContext(Dispatchers.IO) { tabsByPart(current.sheets) }
+            val printed = withContext(Dispatchers.IO) { markedSheetsByPart(current.sheets) }
             if (printed.isEmpty()) {
-                notices.tryEmit("No tempo marks found on these tabs")
+                notices.tryEmit("No tempo marks found on these sheets")
                 return@launch
             }
             session.updateSong(current.song.withPrintedTempos(printed))
-            notices.tryEmit("Tempo read from ${printed.size} ${if (printed.size == 1) "tab" else "tabs"}")
+            notices.tryEmit(tempoReport(printed.keys, current.sheets))
         }
     }
 
-    /** Each part's first sheet that has marks. Reads files, so call it off the main thread. */
-    private fun tabsByPart(sheets: RoleSheetMap): Map<Role, BarLayout> {
+    /** Says what wasn't read too, so a sheet left out doesn't look like a sheet with no tempo changes. */
+    private fun tempoReport(read: Set<Role>, sheets: RoleSheetMap): String = buildString {
+        append("Tempo set for ").append(read.joinToString(", ") { it.label })
+        val withoutMarks = sheets.assignments.filterValues { it.isNotEmpty() }.keys - read
+        if (withoutMarks.isNotEmpty()) append(". No marks for ").append(withoutMarks.joinToString(", ") { it.label })
+        val unassigned = (sheets.files.keys - sheets.assignments.values.flatten().map { it.fileId }.toSet()).size
+        if (unassigned > 0) append(". Skipped $unassigned ${if (unassigned == 1) "sheet" else "sheets"} with no part")
+    }
+
+    /** Every part's sheets in order, leaving out those with no marks. Reads files, so call it off the main thread. */
+    private fun markedSheetsByPart(sheets: RoleSheetMap): Map<Role, List<BarLayout>> {
         val layouts = app.sheetLayouts.layoutsFor(sheets.files.keys.toList())
-        return Role.entries.mapNotNull { part ->
+        return Role.entries.associateWith { part ->
             sheets.segmentsFor(part)
-                .mapNotNull { layouts[it.fileId] }
-                .firstOrNull { it.tempos.isNotEmpty() || it.meters.isNotEmpty() }
-                ?.let { part to it }
-        }.toMap()
+                .map { it.fileId }
+                .distinct()
+                .mapNotNull(layouts::get)
+                .filter { it.tempos.isNotEmpty() || it.meters.isNotEmpty() }
+        }.filterValues { it.isNotEmpty() }
     }
 
     fun removePdf(id: FileId) = editSheets { it.withoutFile(id) }

@@ -28,8 +28,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,7 +78,7 @@ fun SongTab(state: MasterState, viewModel: MasterViewModel) {
     ) {
         // Changing tempo under a running timeline would leave phones with no shared plan.
         val songEditable = state.transport !is TransportState.Running
-        SongSettings(state.song, songEditable, viewModel::updateSong)
+        SongSettings(state.song, state.ownRole, songEditable, viewModel::updateSong)
         OutlinedButton(
             onClick = viewModel::readTempoFromTabs,
             modifier = Modifier.fillMaxWidth(),
@@ -92,7 +94,7 @@ fun SongTab(state: MasterState, viewModel: MasterViewModel) {
 }
 
 @Composable
-private fun SongSettings(song: SongConfig, enabled: Boolean, onChange: (SongConfig) -> Unit) {
+private fun SongSettings(song: SongConfig, ownRole: Role, enabled: Boolean, onChange: (SongConfig) -> Unit) {
     OutlinedTextField(
         value = song.title,
         onValueChange = { onChange(song.copy(title = it)) },
@@ -128,7 +130,7 @@ private fun SongSettings(song: SongConfig, enabled: Boolean, onChange: (SongConf
         }
     }
 
-    SongChanges(song, enabled, onChange)
+    SongChanges(song, ownRole, enabled, onChange)
 }
 
 @Composable
@@ -169,36 +171,57 @@ private fun NumberField(
 }
 
 @Composable
-private fun SongChanges(song: SongConfig, enabled: Boolean, onChange: (SongConfig) -> Unit) {
+private fun SongChanges(song: SongConfig, ownRole: Role, enabled: Boolean, onChange: (SongConfig) -> Unit) {
+    var part by rememberSaveable { mutableStateOf(ownRole) }
+
     Text("Tempo and time changes", style = MaterialTheme.typography.titleSmall)
     Text(
-        "The BPM above is how the song opens. A change can be for everyone or just some parts. " +
-            "Each part's bars are numbered as on its own tab.",
+        "The BPM above is how the song opens. Each instrument has its own changes, with bars numbered as on its " +
+            "own tab. Pick one to see and edit its list.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
-    song.changes.forEachIndexed { index, change ->
-        SongChangeRow(
-            change = change,
-            enabled = enabled,
-            onChange = { edited ->
-                onChange(song.copy(changes = song.changes.mapIndexed { i, old -> if (i == index) edited else old }))
-            },
-            onRemove = { onChange(song.copy(changes = song.changes.filterIndexed { i, _ -> i != index })) },
-        )
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Role.entries.forEach { role ->
+            val count = song.changes.count { it.appliesTo(role) }
+            FilterChip(
+                selected = role == part,
+                onClick = { part = role },
+                label = { Text(if (count == 0) role.label else "${role.label} ($count)") },
+            )
+        }
     }
-    TextButton(onClick = { onChange(song.copy(changes = song.changes + nextChange(song))) }, enabled = enabled) {
-        Text("Add a change")
+    song.changes.forEachIndexed { index, change ->
+        if (change.appliesTo(part)) {
+            // Rows come and go as the instrument changes, so each is tied to its change, not its place on screen.
+            key(index) {
+                SongChangeRow(
+                    change = change,
+                    enabled = enabled,
+                    onChange = { edited ->
+                        onChange(song.copy(changes = song.changes.mapIndexed { i, old -> if (i == index) edited else old }))
+                    },
+                    onRemove = { onChange(song.copy(changes = song.changes.filterIndexed { i, _ -> i != index })) },
+                )
+            }
+        }
+    }
+    TextButton(
+        onClick = { onChange(song.copy(changes = song.changes + nextChange(song, part))) },
+        enabled = enabled,
+    ) {
+        Text("Add a change for ${part.label}")
     }
 }
 
-/** Starts from wherever the song last got to, since a new change usually differs in only one way. */
-private fun nextChange(song: SongConfig): SongChange {
-    val last = song.changes.maxByOrNull { it.bar }
+/** Starts from wherever this part last got to, since a new change usually differs in only one way. */
+private fun nextChange(song: SongConfig, part: Role): SongChange {
+    val last = song.changes.filter { it.appliesTo(part) }.maxByOrNull { it.bar }
     return SongChange(
         bar = (last?.bar ?: 1) + BARS_TO_NEW_CHANGE,
         bpm = last?.bpm ?: song.bpm,
         timeSignature = last?.timeSignature ?: song.timeSignature,
+        parts = setOf(part),
     )
 }
 

@@ -43,17 +43,22 @@ The master's Band tab shows each phone's sync as `±N ms`, the most its clock ca
 
 ### Parts on different tempos
 
-A tempo or time signature change can be for the whole band or only some parts, so the drums can go to double time
-while the bass holds. Each phone then shows its own part's beat, BPM, bar number and arrow.
+Each instrument can have its own tempo and time signature changes, so the drums can go to double time while the
+bass holds. Each phone then shows its own part's beat, BPM, bar number and arrow.
 
-**Read tempo from tabs** sets this up from the marks printed on each part's PDF. A change printed on every tab
-goes to everyone, and one printed on only some tabs goes to those parts. A part with no tab follows the changes
-shared by everyone. It replaces any changes already entered, and needs a tab that prints tempo marks and bar
-numbers, as Songsterr's PDFs do. To change one by hand, use the **For** menu under it.
+**Read tempo from tabs** checks every sheet assigned to every part and gives each instrument its own list of
+changes, even where the tabs agree, so one can be edited without touching the others. If a part has several sheets
+it uses all of them, and the first in its order wins where they disagree. A part with no marks follows what the
+marked parts agree on. It replaces any changes already entered, and needs tabs that print tempo marks and bar
+numbers, as Songsterr's PDFs do. Sheets not assigned to a part are skipped, and a message says so.
+
+Pick an instrument above the list to see and edit its changes. **Add a change** adds one for that instrument. The
+**For** menu under a change moves it to other parts, or to **Everyone**.
 
 All parts stay on one song clock. They can move apart and meet again exactly, and after a count-in everyone comes
-in on the same instant, even when each part counts in at its own tempo. **Resume** goes by the shared bar: a part
-on its own tempo comes back in at its place at that moment, which may not be the start of one of its own bars.
+in on the same instant, even when each part counts in at its own tempo. **Resume** goes by the bar the master's own
+part paused in. Parts on the master's tempo come back in on that bar line, and a part on its own tempo comes back
+in at its place at that moment, which may not be the start of one of its own bars.
 
 ### The arrow
 
@@ -75,8 +80,8 @@ arrow reads straight through the printed bars.
 Debug builds can include a sample song, so testing doesn't need PDFs on the master phone. On the **Song** tab,
 **Load test tabs (Iron Man)** imports the guitar, bass and drum tabs, assigns each to its part, and loads the song
 with the tempo marks and time signatures read from the tabs. That makes it a good test of tempo changes: eight
-tempos from 65 to 168 BPM, plus a single 2/4 bar at bar 8. All three tabs agree, so every change is for the whole
-band. Vocals and Keys get nothing, which is a handy way to see the follower's waiting screen.
+tempos from 65 to 168 BPM, plus a single 2/4 bar at bar 8. Guitar, Bass and Drums each get their own list. Vocals
+and Keys get no sheet, which is a handy way to see the follower's waiting screen, and follow what the tabs agree on.
 
 The PDFs live in `app/src/debug/assets/test-tabs/`. They are commercial tabs, so they're gitignored and never
 go into a release build. Without them the button doesn't appear.

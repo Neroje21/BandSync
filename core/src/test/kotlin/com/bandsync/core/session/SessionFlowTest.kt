@@ -416,6 +416,27 @@ class SessionFlowTest {
     }
 
     @Test
+    fun `resume stays on a bar line when every change belongs to a part`() = runTest {
+        val own = { part: Role -> SongChange(3, 180, TimeSignature(4, 4), parts = setOf(part)) }
+        session.updateSong(SongConfig(bpm = 120, changes = listOf(own(Role.GUITAR), own(Role.DRUMS))))
+        val (drummer, _) = client("drummer", Role.DRUMS)
+        network.connect("drummer", drummer)
+        settle()
+        session.start() // Bar 1 is 4 s from now, and bars take 4/3 s each from bar 3.
+        masterClock.ns += 10_500 * MS
+        session.pause()
+        masterClock.ns += 1_000 * MS
+
+        session.start()
+        settle()
+
+        val drums = running(drummer)
+        assertEquals(16L, drums.playFromBeat)
+        assertEquals(1, drums.beatInBar(drums.playFromBeat))
+        assertEquals(drums, assertIs<TransportState.Running>(session.state.value.transport).timeline)
+    }
+
+    @Test
     fun `pausing during a count-in resumes from the same place`() = runTest {
         session.updateSong(splitSong)
         session.start()

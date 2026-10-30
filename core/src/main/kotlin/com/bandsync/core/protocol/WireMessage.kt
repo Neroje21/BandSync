@@ -27,7 +27,9 @@ data class SongChange(
     val bpm: Int,
     val timeSignature: TimeSignature,
     val parts: Set<Role> = emptySet(),
-)
+) {
+    fun appliesTo(part: Role): Boolean = parts.isEmpty() || part in parts
+}
 
 /** [bpm] and [timeSignature] are how the song opens. */
 @Serializable
