@@ -48,6 +48,14 @@ data class Timeline(
         return if (masterTimeOf(beat) == masterNs) beat else beat + 1
     }
 
+    /** Where the sheet arrow belongs, between beats too. It waits at the first note until the count-in ends. */
+    fun cursorBeatAt(masterNs: Long): Double {
+        val beat = beatAt(masterNs)
+        if (isCountIn(beat)) return playFromBeat.toDouble()
+        val beatStartNs = masterTimeOf(beat)
+        return beat + (masterNs - beatStartNs).toDouble() / (masterTimeOf(beat + 1) - beatStartNs)
+    }
+
     fun isCountIn(beat: Long): Boolean = beat < playFromBeat
     fun barOf(beat: Long): Long = map.barOf(beat)
     fun secondsAt(beat: Long): Long = map.secondsAt(beat)
@@ -80,5 +88,7 @@ sealed interface TransportState {
     data class Paused(val timeline: Timeline, val atMasterNs: Long) : TransportState {
         /** A pause during the countdown or count-in stays at the place the song was about to play from. */
         val beat: Long get() = maxOf(timeline.beatAt(atMasterNs), timeline.playFromBeat)
+
+        fun cursorBeatAt(masterNs: Long): Double = timeline.cursorBeatAt(minOf(masterNs, atMasterNs))
     }
 }

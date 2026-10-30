@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.bandsync.app.BandSyncApp
 import com.bandsync.app.net.DiscoveredHost
 import com.bandsync.app.net.NearbyTransport
+import com.bandsync.app.pdf.SheetLayouts
 import com.bandsync.core.metronome.MetronomeEngine
 import com.bandsync.core.metronome.TransportState
 import com.bandsync.core.session.ClientSession
@@ -41,6 +42,7 @@ class ClientViewModel(application: Application) : AndroidViewModel(application) 
 
     val role: Role = app.profile.role
     val store: SheetStore = app.store
+    val sheetLayouts: SheetLayouts = app.sheetLayouts
     val state = session.state
     val hosts = nearby.hosts
     val pairingCode = nearby.pairingCode

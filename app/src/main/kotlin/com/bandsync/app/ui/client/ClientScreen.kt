@@ -129,7 +129,14 @@ private fun InSession(
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (state.sheetsReady) {
-                SheetViewer(pages, viewModel.store, Modifier.fillMaxSize())
+                SheetViewer(
+                    pages = pages,
+                    store = viewModel.store,
+                    layouts = viewModel.sheetLayouts,
+                    transport = followed,
+                    masterNow = viewModel::masterNow,
+                    modifier = Modifier.fillMaxSize(),
+                )
             } else {
                 WaitingForSheet(viewModel.role, state)
             }

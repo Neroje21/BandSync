@@ -56,7 +56,14 @@ fun LiveTab(state: MasterState, viewModel: MasterViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                SheetViewer(pages, viewModel.store, Modifier.fillMaxSize())
+                SheetViewer(
+                    pages = pages,
+                    store = viewModel.store,
+                    layouts = viewModel.sheetLayouts,
+                    transport = state.transport,
+                    masterNow = viewModel::localNow,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
             CountdownOverlay(playhead)
         }

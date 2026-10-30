@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.os.Build
 import androidx.core.content.edit
+import com.bandsync.app.pdf.SheetLayouts
 import com.bandsync.core.sheets.Role
 import com.bandsync.core.sheets.SheetStore
 import com.bandsync.core.time.MonotonicClock
@@ -15,6 +16,8 @@ class BandSyncApp : Application() {
 
     /** In the cache directory so the system can reclaim old sheets. They can always be sent again. */
     val store: SheetStore by lazy { SheetStore(File(cacheDir, "sheets")) }
+
+    val sheetLayouts: SheetLayouts by lazy { SheetLayouts(store) }
 
     val profile: Profile by lazy { Profile(this) }
 }

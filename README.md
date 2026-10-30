@@ -41,6 +41,21 @@ The metronome keeps going after the last bar until someone presses **Stop**.
 
 The master's Band tab shows each phone's sync as `±N ms`, the most its clock can be off the master's.
 
+### The arrow
+
+While a song runs, a red arrow moves through the tab to show what to play, and the page scrolls to keep the
+current line in view. It waits on the first note during the count-in. Pinch to zoom and following pauses until
+you zoom back out.
+
+The arrow needs a tab that prints bar numbers, as Songsterr's PDFs do. Other PDFs still show and scroll by hand,
+with no arrow. It also relies on the song's bars matching the tab, so add a change for any tempo or time
+signature change, especially a bar of a different length: otherwise the arrow falls behind or runs ahead from
+that bar on.
+
+The arrow lands on the first note of every bar. Within a bar it moves evenly by beat, and tabs give fast passages
+extra width, so it can sit a little ahead of or behind individual notes there. Repeat signs aren't followed: the
+arrow reads straight through the printed bars.
+
 ### Test tabs
 
 Debug builds can include a sample song, so testing doesn't need PDFs on the master phone. On the **Song** tab,
@@ -102,6 +117,10 @@ frame (about 16 ms at 60 Hz) between phones. The simulated figures below cover c
 These come from `BandSimulationTest`, which models clock drift and random uneven delays. They aren't
 measurements from real phones.
 
+**The arrow.** Each phone finds the printed bar numbers in its own PDF, which gives the position of every bar.
+It then works out the arrow's place from the same shared timeline as the beat, so arrows need no messages of
+their own and move together on every phone.
+
 ## How sheets reach the right phone
 
 Files are named by their SHA-256 hash, and sheets are assigned to parts rather than devices. Two guitarists
@@ -127,7 +146,7 @@ pages out without turning them into images. Don't rely on page ranges to keep pa
 core/   Plain Kotlin with no Android imports, fully unit tested
   time/       clock sync
   metronome/  song map, timeline, playhead, drift-free ticker
-  sheets/     roles, role-to-file map, page ranges, file store
+  sheets/     roles, role-to-file map, page ranges, file store, bar positions
   protocol/   wire messages
   session/    master and follower logic, behind a Transport interface
 

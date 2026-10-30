@@ -8,6 +8,7 @@ import com.bandsync.app.BandSyncApp
 import com.bandsync.app.net.JoinRequest
 import com.bandsync.app.net.NearbyTransport
 import com.bandsync.app.pdf.PdfImporter
+import com.bandsync.app.pdf.SheetLayouts
 import com.bandsync.app.pdf.TestTabs
 import com.bandsync.core.metronome.MetronomeEngine
 import com.bandsync.core.metronome.TransportState
@@ -47,6 +48,7 @@ class MasterViewModel(application: Application) : AndroidViewModel(application) 
     private val importErrors = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
     val store: SheetStore = app.store
+    val sheetLayouts: SheetLayouts = app.sheetLayouts
     val hasTestTabs: Boolean = TestTabs.isAvailable(application)
     val state = session.state
     val joinRequests = nearby.joinRequests
